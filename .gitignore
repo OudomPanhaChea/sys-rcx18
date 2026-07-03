@@ -1,0 +1,17 @@
+# --- Composer dependencies ---------------------------------------------------
+# These are restored automatically by running:  composer install
+# (composer.json + composer.lock below are what tell Composer what to fetch.)
+/vendor/*
+
+# ...BUT keep the hand-placed legacy PHPMailer: it is NOT a Composer package,
+# the app loads it via require_once('vendor/phpmailer/class.phpmailer.php'),
+# so it must stay in Git or email will break.
+!/vendor/phpmailer/
+
+# Keep composer.lock in Git (do NOT ignore it) so everyone installs the exact
+# same versions.
+
+# --- CodeIgniter runtime junk ------------------------------------------------
+/application/logs/*.php
+/application/cache/*
+!/application/cache/index.html
