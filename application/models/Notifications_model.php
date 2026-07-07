@@ -28,10 +28,30 @@ class Notifications_model extends CI_Model
     }
 
     function create($data){
-        if($this->db->insert('notifications', $data))
-            return $this->db->insert_id();
-        else
-            return false; 
+        if($this->db->insert('notifications', $data)){
+            $insert_id = $this->db->insert_id();
+
+            // Mirror admin-directed notifications to the Telegram group in
+            // real-time (no-op unless Telegram is enabled in Settings and the
+            // recipient is an admin). Never let a Telegram failure break the
+            // notification flow.
+            if(function_exists('push_admin_notification_to_telegram')){
+                // Catch Throwable (PHP 7+) so neither an Exception nor an Error
+                // raised while building/sending the Telegram message can ever
+                // break notification creation.
+                try {
+                    push_admin_notification_to_telegram($data);
+                } catch (Throwable $e) {
+                    log_message('error', 'Telegram notification failed: '.$e->getMessage());
+                } catch (Exception $e) {
+                    log_message('error', 'Telegram notification failed: '.$e->getMessage());
+                }
+            }
+
+            return $insert_id;
+        }else{
+            return false;
+        }
     }
     
     function delete($id = '', $type = '', $type_id = '', $from_id = '', $to_id = ''){

@@ -49,15 +49,19 @@
                           <li class="nav-item"><a href="<?=base_url('settings/maintenance-mode')?>" class="nav-link <?=($main_page == 'maintenance-mode')?'active':''?>"><i class="fas fa-wrench"></i> <?=$this->lang->line('maintenance_mode_title')?htmlspecialchars($this->lang->line('maintenance_mode_title')):'Maintenance Mode'?></a></li>
                           <li class="nav-item"><a href="<?=base_url('settings/livechat')?>" class="nav-link <?=($main_page == 'livechat')?'active':''?>"><i class="fas fa-comment"></i> <?=$this->lang->line('livechat')?htmlspecialchars($this->lang->line('livechat')):'LiveChat'?></a></li>
 
+                          <li class="nav-item"><a href="<?=base_url('settings/telegram')?>" class="nav-link <?=($main_page == 'telegram')?'active':''?>"><i class="fab fa-telegram-plane"></i> <?=$this->lang->line('telegram')?htmlspecialchars($this->lang->line('telegram')):'Telegram'?></a></li>
+
                         <?php }else{ ?>
                           <li class="nav-item"><a href="<?=base_url('settings/company')?>" class="nav-link <?=($main_page == 'company')?'active':''?>"><i class="fas fa-copyright"></i> <?=$this->lang->line('company')?$this->lang->line('company'):'Company'?></a></li>
 
                           <?php if (is_module_allowed('taxes')){ ?> 
                             <li class="nav-item"><a href="<?=base_url('settings/taxes')?>" class="nav-link <?=($main_page == 'taxes')?'active':''?>"><i class="fas fa-money-bill-alt"></i> <?=$this->lang->line('taxes')?$this->lang->line('taxes'):'Taxes'?></a></li>
                           <?php } ?> 
-                          <?php if (is_module_allowed('user_permissions')){ ?> 
+                          <?php if (is_module_allowed('user_permissions')){ ?>
                             <li class="nav-item"><a href="<?=base_url('settings/user-permissions')?>" class="nav-link <?=($main_page == 'permissions')?'active':''?>"><i class="fas fa-user-cog"></i> <?=$this->lang->line('user_permissions')?$this->lang->line('user_permissions'):'User Permissions'?></a></li>
                           <?php } ?>
+
+                          <li class="nav-item"><a href="<?=base_url('settings/telegram')?>" class="nav-link <?=($main_page == 'telegram')?'active':''?>"><i class="fab fa-telegram-plane"></i> <?=$this->lang->line('telegram')?htmlspecialchars($this->lang->line('telegram')):'Telegram'?></a></li>
                         <?php } ?>
                         
                       </ul>
@@ -95,7 +99,7 @@
       $("#footer_code").val(editor.getValue());
     });
     
-    CodeMirror.fromTextArea(document.getElementById('livechat'), { 
+    CodeMirror.fromTextArea(document.getElementById('livechat'), {
       lineNumbers: true,
       theme: 'duotone-dark',
     }).on('change', editor => {
@@ -104,6 +108,72 @@
 
 
 
+  </script>
+<?php } ?>
+
+<?php if($main_page == 'telegram'){ ?>
+  <script>
+    // Dedicated handlers for the Telegram settings form. Placed here (after
+    // includes/js) so jQuery is available, and using its own form id so it
+    // does not hit the shared #setting-form handler (which expects a logo
+    // "data" object in the response and otherwise leaves the spinner stuck).
+    $("#telegram-form").on('submit', function(e) {
+      e.preventDefault();
+      var form = $(this),
+          save_button = form.find('.savebtn'),
+          output_status = form.find('.result');
+
+      save_button.addClass('btn-progress').attr('disabled', true);
+      output_status.html('');
+
+      $.ajax({
+        type: 'POST',
+        url: form.attr('action'),
+        data: new FormData(this),
+        cache: false,
+        contentType: false,
+        processData: false,
+        dataType: 'json',
+        success: function(result) {
+          var cls = (result && result['error'] === false) ? 'alert-success' : 'alert-danger';
+          output_status.prepend('<div class="alert ' + cls + '">' + (result ? result['message'] : '') + '</div>');
+          output_status.find('.alert').delay(4000).fadeOut();
+          save_button.removeClass('btn-progress').attr('disabled', false);
+        },
+        error: function() {
+          output_status.prepend('<div class="alert alert-danger">Something went wrong. Please try again.</div>');
+          output_status.find('.alert').delay(4000).fadeOut();
+          save_button.removeClass('btn-progress').attr('disabled', false);
+        }
+      });
+    });
+
+    $(document).on('click', '#telegram_test_btn', function() {
+      var btn = $(this),
+          result = $('#telegram_test_result');
+      result.html('');
+      btn.attr('disabled', true).addClass('btn-progress');
+
+      $.ajax({
+        type: 'POST',
+        url: '<?=base_url('settings/test-telegram')?>',
+        data: {
+          bot_token: $('#telegram_bot_token').val(),
+          chat_id: $('#telegram_chat_id').val(),
+          thread_id: $('#telegram_thread_id').val()
+        },
+        dataType: 'json',
+        success: function(res) {
+          var cls = (res && res['error']) ? 'text-danger' : 'text-success';
+          result.html('<span class="' + cls + '">' + (res ? res['message'] : '') + '</span>');
+          btn.attr('disabled', false).removeClass('btn-progress');
+        },
+        error: function() {
+          result.html('<span class="text-danger"><?=$this->lang->line('telegram_test_failed')?htmlspecialchars($this->lang->line('telegram_test_failed')):'Could not send. Check the bot token and chat ID.'?></span>');
+          btn.attr('disabled', false).removeClass('btn-progress');
+        }
+      });
+    });
   </script>
 <?php } ?>
 

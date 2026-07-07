@@ -536,6 +536,125 @@ class Settings extends CI_Controller
 		}
 	}
 
+	public function telegram()
+	{
+		if ($this->ion_auth->logged_in() && ($this->ion_auth->in_group(1) || $this->ion_auth->in_group(3))) {
+			$this->data['page_title'] = 'Settings - ' . company_name();
+			$this->data['main_page'] = 'telegram';
+			$this->data['current_user'] = $this->ion_auth->user()->row();
+
+			$telegram = get_telegram_settings();
+			$this->data['telegram_enabled'] = (!empty($telegram) && !empty($telegram->enabled)) ? $telegram->enabled : '';
+			$this->data['telegram_bot_token'] = (!empty($telegram) && !empty($telegram->bot_token)) ? $telegram->bot_token : '';
+			$this->data['telegram_chat_id'] = (!empty($telegram) && !empty($telegram->chat_id)) ? $telegram->chat_id : '';
+			$this->data['telegram_thread_id'] = (!empty($telegram) && isset($telegram->thread_id)) ? $telegram->thread_id : '';
+
+			$this->load->view('settings', $this->data);
+		} else {
+			redirect('auth', 'refresh');
+		}
+	}
+
+	public function save_telegram_setting()
+	{
+		if ($this->ion_auth->logged_in() && ($this->ion_auth->in_group(1) || $this->ion_auth->in_group(3))) {
+			$this->form_validation->set_rules('bot_token', 'bot token', 'trim|xss_clean');
+			$this->form_validation->set_rules('chat_id', 'chat id', 'trim|xss_clean');
+			$this->form_validation->set_rules('thread_id', 'topic id', 'trim|xss_clean');
+
+			if ($this->form_validation->run() == TRUE) {
+				$data_json = array(
+					'enabled' => $this->input->post('enabled') ? '1' : '0',
+					'bot_token' => trim($this->input->post('bot_token')),
+					'chat_id' => trim($this->input->post('chat_id')),
+					'thread_id' => trim($this->input->post('thread_id')),
+				);
+
+				$data = array(
+					'value' => json_encode($data_json)
+				);
+
+				$setting_type = 'telegram';
+
+				if ($this->settings_model->save_settings($setting_type, $data)) {
+					$this->data['error'] = false;
+					$this->data['message'] = $this->lang->line('updated_successfully') ? $this->lang->line('updated_successfully') : "Updated successfully.";
+					echo json_encode($this->data);
+				} else {
+					$this->data['error'] = true;
+					$this->data['message'] = $this->lang->line('something_wrong_try_again') ? $this->lang->line('something_wrong_try_again') : "Something wrong! Try again.";
+					echo json_encode($this->data);
+				}
+			} else {
+				$this->data['error'] = true;
+				$this->data['message'] = validation_errors();
+				echo json_encode($this->data);
+			}
+		} else {
+			$this->data['error'] = true;
+			$this->data['message'] = $this->lang->line('access_denied') ? $this->lang->line('access_denied') : "Access Denied";
+			echo json_encode($this->data);
+		}
+	}
+
+	public function test_telegram()
+	{
+		if ($this->ion_auth->logged_in() && ($this->ion_auth->in_group(1) || $this->ion_auth->in_group(3))) {
+
+			// Allow testing with values typed into the form before they are saved.
+			$token = trim($this->input->post('bot_token'));
+			$chat_id = trim($this->input->post('chat_id'));
+			$thread_id = trim($this->input->post('thread_id'));
+
+			$message = '<b>✅ Telegram test message</b>' . "\n" . htmlspecialchars(company_name(), ENT_QUOTES, 'UTF-8') . "\n" . 'Admin notifications will be delivered here.';
+
+			$ok = false;
+			if (!empty($token) && !empty($chat_id)) {
+				// Use posted credentials directly so the admin can verify before saving.
+				$url = 'https://api.telegram.org/bot' . $token . '/sendMessage';
+				$post = array(
+					'chat_id' => $chat_id,
+					'text' => $message,
+					'parse_mode' => 'HTML',
+					'disable_web_page_preview' => true,
+				);
+				if ($thread_id !== '') {
+					$post['message_thread_id'] = $thread_id;
+				}
+				if (function_exists('curl_init')) {
+					$ch = curl_init($url);
+					curl_setopt($ch, CURLOPT_POST, true);
+					curl_setopt($ch, CURLOPT_POSTFIELDS, http_build_query($post));
+					curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+					curl_setopt($ch, CURLOPT_TIMEOUT, 8);
+					curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 5);
+					curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+					curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, false);
+					$response = curl_exec($ch);
+					$http_code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+					curl_close($ch);
+					$ok = ($response !== false && $http_code == 200);
+				}
+			} else {
+				// Fall back to saved settings.
+				$ok = send_telegram_message($message);
+			}
+
+			if ($ok) {
+				$this->data['error'] = false;
+				$this->data['message'] = $this->lang->line('telegram_test_sent') ? $this->lang->line('telegram_test_sent') : "Test message sent. Check your Telegram group.";
+			} else {
+				$this->data['error'] = true;
+				$this->data['message'] = $this->lang->line('telegram_test_failed') ? $this->lang->line('telegram_test_failed') : "Could not send. Check the bot token and chat ID.";
+			}
+			echo json_encode($this->data);
+		} else {
+			$this->data['error'] = true;
+			$this->data['message'] = $this->lang->line('access_denied') ? $this->lang->line('access_denied') : "Access Denied";
+			echo json_encode($this->data);
+		}
+	}
+
 	public function payment()
 	{
 		if ($this->ion_auth->logged_in() && is_module_allowed('payment_gateway') && ($this->ion_auth->in_group(1) || $this->ion_auth->in_group(3))) {

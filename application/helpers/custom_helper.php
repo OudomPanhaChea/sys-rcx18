@@ -2524,4 +2524,301 @@ function formatOffset($offset) {
     return $sign . str_pad($hour, 2, '0', STR_PAD_LEFT).':'. str_pad($minutes,2, '0');
 }
 
+/* -------------------------------------------------------------------------
+ | Telegram admin notifications
+ |
+ | Mirrors every notification that is delivered to an admin user into a
+ | Telegram bot group in real-time. Bot token + chat id + on/off toggle are
+ | stored in the `settings` table under type = 'telegram' (JSON value) and
+ | edited from Settings > Telegram.
+ * ---------------------------------------------------------------------- */
+
+function get_telegram_settings()
+{
+    $CI =& get_instance();
+    $CI->db->from('settings');
+    $CI->db->where(['type' => 'telegram']);
+    $query = $CI->db->get();
+    $data = $query->result_array();
+    if(!$data){
+        return null;
+    }
+    return json_decode($data[0]['value']);
+}
+
+function telegram_enabled()
+{
+    $settings = get_telegram_settings();
+    return (!empty($settings) && !empty($settings->enabled) && $settings->enabled == '1');
+}
+
+function telegram_bot_token()
+{
+    $settings = get_telegram_settings();
+    return (!empty($settings) && !empty($settings->bot_token)) ? trim($settings->bot_token) : '';
+}
+
+function telegram_chat_id()
+{
+    $settings = get_telegram_settings();
+    return (!empty($settings) && !empty($settings->chat_id)) ? trim($settings->chat_id) : '';
+}
+
+/**
+ * Optional message thread (topic) id for supergroups that have Topics
+ * enabled. Empty = send to the group's general/default thread.
+ */
+function telegram_thread_id()
+{
+    $settings = get_telegram_settings();
+    return (!empty($settings) && isset($settings->thread_id) && $settings->thread_id !== '') ? trim($settings->thread_id) : '';
+}
+
+/**
+ * Send a raw message to the configured Telegram group.
+ * Returns true on success, false otherwise. Never throws.
+ */
+function send_telegram_message($text)
+{
+    $token   = telegram_bot_token();
+    $chat_id = telegram_chat_id();
+
+    if(empty($token) || empty($chat_id) || empty($text)){
+        return false;
+    }
+
+    $url = 'https://api.telegram.org/bot'.$token.'/sendMessage';
+    $post = array(
+        'chat_id'                  => $chat_id,
+        'text'                     => $text,
+        'parse_mode'               => 'HTML',
+        'disable_web_page_preview' => true,
+    );
+
+    // Optional: post into a specific topic of a supergroup (Topics enabled).
+    $thread_id = telegram_thread_id();
+    if($thread_id !== ''){
+        $post['message_thread_id'] = $thread_id;
+    }
+
+    if(!function_exists('curl_init')){
+        return false;
+    }
+
+    $ch = curl_init($url);
+    curl_setopt($ch, CURLOPT_POST, true);
+    curl_setopt($ch, CURLOPT_POSTFIELDS, http_build_query($post));
+    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+    curl_setopt($ch, CURLOPT_TIMEOUT, 8);
+    curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 5);
+    // Shared hosts often lack an up-to-date CA bundle; this is an outbound
+    // call to Telegram's API only, so relaxing verification is acceptable.
+    curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+    curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, false);
+
+    $response  = curl_exec($ch);
+    $http_code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    curl_close($ch);
+
+    return ($response !== false && $http_code == 200);
+}
+
+/**
+ * Build a human-readable, plain-text message for a notification row so it
+ * reads well inside Telegram. `$data` is the same array passed to
+ * Notifications_model::create() (keys: notification, type, type_id, from_id).
+ */
+function build_telegram_notification_text($data)
+{
+    $CI =& get_instance();
+
+    $type     = isset($data['type']) ? $data['type'] : '';
+    $type_id  = isset($data['type_id']) ? $data['type_id'] : '';
+    $note     = isset($data['notification']) ? $data['notification'] : '';
+    $base_url = base_url();
+
+    $title = '';
+    $lines = array();
+
+    // Who triggered it
+    $from = '';
+    if(!empty($data['from_id'])){
+        $from_user = $CI->ion_auth->user($data['from_id'])->row();
+        if($from_user){
+            $from = trim($from_user->first_name.' '.$from_user->last_name);
+        }
+    }
+
+    switch($type){
+        case 'new_project':
+            $title = '🆕 New project created';
+            $project = $CI->projects_model->get_projects('', $type_id);
+            if($project){ $lines[] = 'Project: '.$project[0]['title']; }
+            break;
+        case 'project_status':
+            $title = '🔄 Project status changed';
+            $project = $CI->projects_model->get_projects('', $type_id);
+            if($project){ $lines[] = 'Project: '.$project[0]['title']; $lines[] = 'Status: '.$project[0]['project_status']; }
+            break;
+        case 'project_file':
+            $title = '📎 Project file uploaded';
+            $project = $CI->projects_model->get_projects('', $type_id);
+            if($project){ $lines[] = 'Project: '.$project[0]['title']; }
+            break;
+        case 'project_comment':
+            $title = '💬 New project comment';
+            $project = $CI->projects_model->get_projects('', $type_id);
+            if($project){ $lines[] = 'Project: '.$project[0]['title']; }
+            $comment = trim(trim(strip_tags($note)), '"');
+            if($comment !== ''){ $lines[] = 'Comment: '.$comment; }
+            break;
+        case 'new_task':
+            $title = '🆕 New task';
+            $task = $CI->projects_model->get_tasks('', $type_id);
+            if($task){ $lines[] = 'Project: '.$task[0]['project_title']; $lines[] = 'Task: '.$task[0]['title']; }
+            break;
+        case 'task_status':
+            $title = '🔄 Task status changed';
+            $task = $CI->projects_model->get_tasks('', $type_id);
+            if($task){ $lines[] = 'Project: '.$task[0]['project_title']; $lines[] = 'Task: '.$task[0]['title']; $lines[] = 'Status: '.$task[0]['task_status']; }
+            break;
+        case 'task_file':
+            $title = '📎 Task file uploaded';
+            $task = $CI->projects_model->get_tasks('', $type_id);
+            if($task){ $lines[] = 'Project: '.$task[0]['project_title']; $lines[] = 'Task: '.$task[0]['title']; }
+            break;
+        case 'task_comment':
+            $title = '💬 New task comment';
+            $task = $CI->projects_model->get_tasks('', $type_id);
+            if($task){ $lines[] = 'Project: '.$task[0]['project_title']; $lines[] = 'Task: '.$task[0]['title']; }
+            $comment = trim(trim(strip_tags($note)), '"');
+            if($comment !== ''){ $lines[] = 'Comment: '.$comment; }
+            break;
+        case 'new_invoice':
+            $title = '🧾 New invoice';
+            $invoice = $CI->invoices_model->get_invoices($type_id);
+            if($invoice){ $lines[] = 'Invoice: '.$invoice[0]['invoice_id']; }
+            break;
+        case 'bank_transfer':
+            $title = '🏦 Bank transfer request received';
+            $invoice = $CI->invoices_model->get_invoices($type_id);
+            if($invoice){ $lines[] = 'Invoice: '.$invoice[0]['invoice_id']; }
+            break;
+        case 'bank_transfer_accept':
+            $title = '✅ Bank transfer accepted';
+            $invoice = $CI->invoices_model->get_invoices($type_id);
+            if($invoice){ $lines[] = 'Invoice: '.$invoice[0]['invoice_id']; }
+            break;
+        case 'bank_transfer_reject':
+            $title = '❌ Bank transfer rejected';
+            $invoice = $CI->invoices_model->get_invoices($type_id);
+            if($invoice){ $lines[] = 'Invoice: '.$invoice[0]['invoice_id']; }
+            break;
+        case 'payment_received':
+            $title = '💰 Payment received';
+            $invoice = $CI->invoices_model->get_invoices($type_id);
+            if($invoice){ $lines[] = 'Invoice: '.$invoice[0]['invoice_id']; }
+            break;
+        case 'new_estimate':
+            $title = '📄 New estimate';
+            if($note){ $lines[] = 'Estimate: '.$note; }
+            break;
+        case 'estimate_accept':
+            $title = '✅ Estimate accepted';
+            if($note){ $lines[] = 'Estimate: '.$note; }
+            break;
+        case 'estimate_reject':
+            $title = '❌ Estimate rejected';
+            if($note){ $lines[] = 'Estimate: '.$note; }
+            break;
+        case 'new_meeting':
+            $title = '📅 New meeting scheduled';
+            if($note){ $lines[] = 'Meeting: '.$note; }
+            break;
+        case 'leave_request':
+            $title = '🌴 Leave request received';
+            break;
+        case 'leave_request_accepted':
+            $title = '✅ Leave request accepted';
+            break;
+        case 'leave_request_rejected':
+            $title = '❌ Leave request rejected';
+            break;
+        case 'new_lead':
+            $title = '🎯 New lead assigned';
+            if($note){ $lines[] = $note; }
+            break;
+        case 'new_user':
+            $title = '👤 New user registered';
+            $user = $CI->ion_auth->user($type_id)->row();
+            if($user){ $lines[] = 'User: '.trim($user->first_name.' '.$user->last_name); }
+            break;
+        case 'new_plan':
+            $title = '⭐ Subscription plan ordered';
+            if($note){ $lines[] = 'Plan: '.$note; }
+            break;
+        case 'offline_request':
+            $title = '🏦 Offline / bank transfer request';
+            if($note){ $lines[] = 'Plan: '.$note; }
+            break;
+        default:
+            $title = '🔔 '.ucwords(str_replace('_', ' ', $type ? $type : 'notification'));
+            if($note){ $lines[] = $note; }
+            break;
+    }
+
+    $company = company_name();
+
+    $message  = '<b>'.htmlspecialchars($title, ENT_QUOTES, 'UTF-8').'</b>';
+    if($company){
+        $message .= "\n<i>".htmlspecialchars($company, ENT_QUOTES, 'UTF-8').'</i>';
+    }
+    foreach($lines as $line){
+        $message .= "\n".htmlspecialchars($line, ENT_QUOTES, 'UTF-8');
+    }
+    if($from){
+        $message .= "\n\n👤 ".htmlspecialchars($from, ENT_QUOTES, 'UTF-8');
+    }
+    $message .= "\n".htmlspecialchars(format_date(date('Y-m-d H:i:s'), system_date_format()), ENT_QUOTES, 'UTF-8');
+
+    return $message;
+}
+
+/**
+ * Called after a notification is created. If Telegram is enabled and the
+ * recipient is an admin, mirror the notification to the Telegram group.
+ */
+function push_admin_notification_to_telegram($data)
+{
+    if(!telegram_enabled()){
+        return false;
+    }
+    if(empty($data['to_id'])){
+        return false;
+    }
+
+    $CI =& get_instance();
+
+    // Only mirror notifications that land in an admin's inbox.
+    if(!$CI->ion_auth->is_admin($data['to_id'])){
+        return false;
+    }
+
+    // A single event (e.g. a new task) often creates one notification row per
+    // admin recipient. The Telegram group is one destination, so de-duplicate
+    // per request to avoid sending the same alert several times.
+    static $sent = array();
+    $key = (isset($data['type']) ? $data['type'] : '').'|'
+         .(isset($data['type_id']) ? $data['type_id'] : '').'|'
+         .(isset($data['notification']) ? $data['notification'] : '').'|'
+         .(isset($data['from_id']) ? $data['from_id'] : '');
+    if(isset($sent[$key])){
+        return false;
+    }
+    $sent[$key] = true;
+
+    $text = build_telegram_notification_text($data);
+    return send_telegram_message($text);
+}
+
 ?>

@@ -228,7 +228,7 @@
                             <?php if (!empty($project['category_title']) || !empty($project['issue_title'])) { ?>
                               <div class="project-card__tags">
                                 <?php if (!empty($project['category_title'])) { ?>
-                                  <span class="badge badge-primary"><i class="fas fa-tag"></i>
+                                  <span class="badge badge-primary">
                                     <?= htmlspecialchars($project['category_title']) ?></span>
                                 <?php } ?>
                                 <?php if (!empty($project['issue_title'])) { ?>

@@ -330,3 +330,19 @@ $lang['you_want_to_activate_this_user'] = "You want to activate this user?";
 $lang['you_want_to_deactivate_this_user_this_user_will_be_not_able_to_login_after_deactivation'] = "You want to deactivate this user? This user will be not able to login after deactivation.";
 $lang['you_want_to_delete_this_chat_this_can_not_be_undo'] = "You want to delete this chat? This can not be undo.";
 $lang['we_will_contact_you_for_further_process_of_payment_as_soon_as_possible_click_ok_to_confirm'] = "We will contact you for further process of payment as soon as possible. Click OK to confirm.";
+
+// Telegram admin notifications
+$lang['telegram'] = "Telegram";
+$lang['telegram_help'] = "Every notification an admin receives is mirrored to your Telegram group in real-time.";
+$lang['telegram_step_bot'] = "Create a bot with <b>@BotFather</b> and copy its <b>token</b>.";
+$lang['telegram_step_group'] = "Add the bot to your group, then get the group <b>chat ID</b> (e.g. via <b>@getidsbot</b>). Group IDs usually start with <b>-100</b>.";
+$lang['enable_telegram_notifications'] = "Enable Telegram Notifications";
+$lang['send_admin_notifications_to_telegram'] = "Send admin notifications to the Telegram group";
+$lang['bot_token'] = "Bot Token";
+$lang['group_chat_id'] = "Group Chat ID";
+$lang['topic_id'] = "Topic ID";
+$lang['optional'] = "optional";
+$lang['topic_id_help'] = "For supergroups with <b>Topics</b> enabled, send into a specific topic. Open the topic in Telegram Web/Desktop &mdash; the number after the last <b>/</b> in the URL is the Topic ID. Leave blank to post to the group's general chat.";
+$lang['send_test_message'] = "Send Test Message";
+$lang['telegram_test_sent'] = "Test message sent. Check your Telegram group.";
+$lang['telegram_test_failed'] = "Could not send. Check the bot token and chat ID.";
