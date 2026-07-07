@@ -500,7 +500,7 @@ function theme_color(){
     if(isset($data->theme_color) && !empty($data->theme_color)){
         return $data->theme_color;
     }else{
-        return '#e52165';
+        return '#304A59'; // company primary — brand default
     }
 
 }
@@ -1512,6 +1512,56 @@ function task_status($id = ''){
             }
         }
         return $tmp;
+    }else{
+        return false;
+    }
+}
+
+function project_categories($category_id = ''){
+    $CI =& get_instance();
+    $CI->db->from('project_categories');
+    $CI->db->where(['saas_id'=>$CI->session->userdata('saas_id')]);
+    if(!empty($category_id)){
+        $CI->db->where(['id'=>$category_id]);
+    }
+    $CI->db->order_by('title', 'ASC');
+    $query = $CI->db->get();
+    $data = $query->result_array();
+    if(!empty($data)){
+        return $data;
+    }else{
+        return false;
+    }
+}
+
+function project_category_counts(){
+    $CI =& get_instance();
+    $CI->db->select('category_id, COUNT(id) as total', false);
+    $CI->db->from('projects');
+    $CI->db->where('saas_id', $CI->session->userdata('saas_id'));
+    $CI->db->where('category_id IS NOT NULL', null, false);
+    $CI->db->group_by('category_id');
+    $rows = $CI->db->get()->result_array();
+    $counts = array();
+    foreach($rows as $r){ $counts[(int)$r['category_id']] = (int)$r['total']; }
+    return $counts;
+}
+
+function project_issues($category_id = '', $issue_id = ''){
+    $CI =& get_instance();
+    $CI->db->from('project_issues');
+    $CI->db->where(['saas_id'=>$CI->session->userdata('saas_id')]);
+    if(!empty($category_id) && is_numeric($category_id)){
+        $CI->db->where(['category_id'=>$category_id]);
+    }
+    if(!empty($issue_id) && is_numeric($issue_id)){
+        $CI->db->where(['id'=>$issue_id]);
+    }
+    $CI->db->order_by('title', 'ASC');
+    $query = $CI->db->get();
+    $data = $query->result_array();
+    if(!empty($data)){
+        return $data;
     }else{
         return false;
     }

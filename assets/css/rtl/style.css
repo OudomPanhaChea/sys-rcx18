@@ -1307,11 +1307,11 @@ h6 .badge {
   background-color: var(--theme-color);
   border-color: var(--theme-color); }
   .btn-primary:focus, .btn-primary.disabled:focus {
-    background-color: #ad00ad !important; }
+    background-color: var(--brand-primary-active) !important; }
     .btn-primary:focus:active, .btn-primary.disabled:focus:active {
-      background-color: #ad00ad !important; }
+      background-color: var(--brand-primary-active) !important; }
   .btn-primary:active, .btn-primary:hover, .btn-primary.disabled:active, .btn-primary.disabled:hover {
-    background-color: #ad00ad !important; }
+    background-color: var(--brand-primary-active) !important; }
 
 .btn-outline-primary, .btn-outline-primary.disabled {
   border-color: var(--theme-color);

@@ -1409,6 +1409,9 @@ class Projects extends CI_Controller
 			$this->data['system_clients'] = $this->ion_auth->users(4)->result();
 
 			$this->data['project_status'] = project_status();
+			$this->data['project_categories'] = project_categories();
+			$this->data['project_category_counts'] = project_category_counts();
+			$this->data['project_issues'] = project_issues();
 
 			if($this->ion_auth->is_admin()){
 				$this->data['projects_all'] = $this->projects_model->get_projects();
@@ -1434,6 +1437,9 @@ class Projects extends CI_Controller
 			$this->data['system_clients'] = $this->ion_auth->users(4)->result();
 
 			$this->data['project_status'] = project_status();
+			$this->data['project_categories'] = project_categories();
+			$this->data['project_category_counts'] = project_category_counts();
+			$this->data['project_issues'] = project_issues();
 
 			$config = array();
 			$config["base_url"] = base_url('projects');
@@ -1490,11 +1496,14 @@ class Projects extends CI_Controller
 				$filter_type = 'sortby';
 			}
 			
+			$category_filter = (isset($_GET['category']) && !empty($_GET['category']) && is_numeric($_GET['category']))?$_GET['category']:'';
+			$issue_filter = (isset($_GET['issue']) && !empty($_GET['issue']) && is_numeric($_GET['issue']))?$_GET['issue']:'';
+
 			if($this->ion_auth->is_admin()){
-				$this->data['projects'] = $this->projects_model->get_projects('','',$config["per_page"], $page, $filter_type, $filter);
+				$this->data['projects'] = $this->projects_model->get_projects('','',$config["per_page"], $page, $filter_type, $filter, $category_filter, $issue_filter);
 				$this->data['projects_all'] = $this->projects_model->get_projects();
 			}else{
-				$this->data['projects'] = $this->projects_model->get_projects($this->session->userdata('user_id'),'',$config["per_page"], $page, $filter_type, $filter);
+				$this->data['projects'] = $this->projects_model->get_projects($this->session->userdata('user_id'),'',$config["per_page"], $page, $filter_type, $filter, $category_filter, $issue_filter);
 				$this->data['projects_all'] = $this->projects_model->get_projects($this->session->userdata('user_id'));
 			}
 			$this->load->view('projects',$this->data);
@@ -1604,8 +1613,10 @@ class Projects extends CI_Controller
 					'description' => $this->input->post('description'),
 					'starting_date' => $starting_date,
 					'ending_date' => $ending_date,
-					'budget' => $this->input->post('budget'),		
-					'status' => $this->input->post('status'),		
+					'budget' => $this->input->post('budget'),
+					'status' => $this->input->post('status'),
+					'category_id' => ($this->input->post('category') && is_numeric($this->input->post('category')))?$this->input->post('category'):NULL,
+					'issue_id' => ($this->input->post('issue') && is_numeric($this->input->post('issue')))?$this->input->post('issue'):NULL,
 				);
 
 				$project_old = $this->projects_model->get_projects('',$project_id);
@@ -1734,8 +1745,10 @@ class Projects extends CI_Controller
 					'description' => $this->input->post('description'),
 					'starting_date' => $starting_date,
 					'ending_date' => $ending_date,
-					'budget' => $this->input->post('budget'),		
-					'status' => $this->input->post('status'),		
+					'budget' => $this->input->post('budget'),
+					'status' => $this->input->post('status'),
+					'category_id' => ($this->input->post('category') && is_numeric($this->input->post('category')))?$this->input->post('category'):NULL,
+					'issue_id' => ($this->input->post('issue') && is_numeric($this->input->post('issue')))?$this->input->post('issue'):NULL,
 				);
 				$project_id = $this->projects_model->create_project($data);
 				
@@ -1833,7 +1846,229 @@ class Projects extends CI_Controller
 		}
 		
 	}
-	
+
+	/* ================= Project Categories & Issues ================= */
+
+	private function _can_manage_categories()
+	{
+		return $this->ion_auth->logged_in() && ($this->ion_auth->is_admin() || permissions('project_create'));
+	}
+
+	public function get_categories_list()
+	{
+		if ($this->ion_auth->logged_in())
+		{
+			$categories = $this->projects_model->get_categories();
+			$temp = array();
+			if($categories){
+				foreach($categories as $key => $category){
+					$temp[$key] = $category;
+					$temp[$key]['issues'] = $this->projects_model->get_issues($category['id']);
+				}
+			}
+			$this->data['error'] = false;
+			$this->data['data'] = $temp;
+			echo json_encode($this->data);
+		}else{
+			$this->data['error'] = true;
+			$this->data['message'] = $this->lang->line('access_denied')?$this->lang->line('access_denied'):"Access Denied";
+			echo json_encode($this->data);
+		}
+	}
+
+	public function get_issues_by_category()
+	{
+		if ($this->ion_auth->logged_in())
+		{
+			$this->form_validation->set_rules('category_id', 'Category', 'trim|required|strip_tags|xss_clean|is_numeric');
+			if($this->form_validation->run() == TRUE){
+				$this->data['error'] = false;
+				$this->data['data'] = $this->projects_model->get_issues($this->input->post('category_id'));
+				echo json_encode($this->data);
+			}else{
+				$this->data['error'] = true;
+				$this->data['message'] = validation_errors();
+				echo json_encode($this->data);
+			}
+		}else{
+			$this->data['error'] = true;
+			$this->data['message'] = $this->lang->line('access_denied')?$this->lang->line('access_denied'):"Access Denied";
+			echo json_encode($this->data);
+		}
+	}
+
+	public function create_category()
+	{
+		if ($this->_can_manage_categories())
+		{
+			$this->form_validation->set_rules('title', 'Category Title', 'trim|required|strip_tags|xss_clean');
+			if($this->form_validation->run() == TRUE){
+				$data = array(
+					'saas_id' => $this->session->userdata('saas_id'),
+					'title' => $this->input->post('title'),
+					'class' => $this->input->post('class')?$this->input->post('class'):'primary',
+				);
+				if($this->projects_model->create_category($data)){
+					$this->data['error'] = false;
+					$this->data['message'] = $this->lang->line('created_successfully')?$this->lang->line('created_successfully'):"Created successfully.";
+					echo json_encode($this->data);
+				}else{
+					$this->data['error'] = true;
+					$this->data['message'] = $this->lang->line('something_wrong_try_again')?$this->lang->line('something_wrong_try_again'):"Something wrong! Try again.";
+					echo json_encode($this->data);
+				}
+			}else{
+				$this->data['error'] = true;
+				$this->data['message'] = validation_errors();
+				echo json_encode($this->data);
+			}
+		}else{
+			$this->data['error'] = true;
+			$this->data['message'] = $this->lang->line('access_denied')?$this->lang->line('access_denied'):"Access Denied";
+			echo json_encode($this->data);
+		}
+	}
+
+	public function edit_category()
+	{
+		if ($this->_can_manage_categories())
+		{
+			$this->form_validation->set_rules('update_id', 'Category ID', 'trim|required|strip_tags|xss_clean|is_numeric');
+			$this->form_validation->set_rules('title', 'Category Title', 'trim|required|strip_tags|xss_clean');
+			if($this->form_validation->run() == TRUE){
+				$data = array(
+					'title' => $this->input->post('title'),
+					'class' => $this->input->post('class')?$this->input->post('class'):'primary',
+				);
+				if($this->projects_model->edit_category($this->input->post('update_id'), $data)){
+					$this->data['error'] = false;
+					$this->data['message'] = $this->lang->line('updated_successfully')?$this->lang->line('updated_successfully'):"Updated successfully.";
+					echo json_encode($this->data);
+				}else{
+					$this->data['error'] = true;
+					$this->data['message'] = $this->lang->line('something_wrong_try_again')?$this->lang->line('something_wrong_try_again'):"Something wrong! Try again.";
+					echo json_encode($this->data);
+				}
+			}else{
+				$this->data['error'] = true;
+				$this->data['message'] = validation_errors();
+				echo json_encode($this->data);
+			}
+		}else{
+			$this->data['error'] = true;
+			$this->data['message'] = $this->lang->line('access_denied')?$this->lang->line('access_denied'):"Access Denied";
+			echo json_encode($this->data);
+		}
+	}
+
+	public function delete_category($category_id = '')
+	{
+		if ($this->_can_manage_categories())
+		{
+			if(empty($category_id)){
+				$category_id = $this->uri->segment(3)?$this->uri->segment(3):'';
+			}
+			if(!empty($category_id) && is_numeric($category_id) && $this->projects_model->delete_category($category_id)){
+				$this->data['error'] = false;
+				$this->data['message'] = $this->lang->line('deleted_successfully')?$this->lang->line('deleted_successfully'):"Deleted successfully.";
+				echo json_encode($this->data);
+			}else{
+				$this->data['error'] = true;
+				$this->data['message'] = $this->lang->line('something_wrong_try_again')?$this->lang->line('something_wrong_try_again'):"Something wrong! Try again.";
+				echo json_encode($this->data);
+			}
+		}else{
+			$this->data['error'] = true;
+			$this->data['message'] = $this->lang->line('access_denied')?$this->lang->line('access_denied'):"Access Denied";
+			echo json_encode($this->data);
+		}
+	}
+
+	public function create_issue()
+	{
+		if ($this->_can_manage_categories())
+		{
+			$this->form_validation->set_rules('category_id', 'Category', 'trim|required|strip_tags|xss_clean|is_numeric');
+			$this->form_validation->set_rules('title', 'Issue Title', 'trim|required|strip_tags|xss_clean');
+			if($this->form_validation->run() == TRUE){
+				$data = array(
+					'saas_id' => $this->session->userdata('saas_id'),
+					'category_id' => $this->input->post('category_id'),
+					'title' => $this->input->post('title'),
+				);
+				if($this->projects_model->create_issue($data)){
+					$this->data['error'] = false;
+					$this->data['message'] = $this->lang->line('created_successfully')?$this->lang->line('created_successfully'):"Created successfully.";
+					echo json_encode($this->data);
+				}else{
+					$this->data['error'] = true;
+					$this->data['message'] = $this->lang->line('something_wrong_try_again')?$this->lang->line('something_wrong_try_again'):"Something wrong! Try again.";
+					echo json_encode($this->data);
+				}
+			}else{
+				$this->data['error'] = true;
+				$this->data['message'] = validation_errors();
+				echo json_encode($this->data);
+			}
+		}else{
+			$this->data['error'] = true;
+			$this->data['message'] = $this->lang->line('access_denied')?$this->lang->line('access_denied'):"Access Denied";
+			echo json_encode($this->data);
+		}
+	}
+
+	public function edit_issue()
+	{
+		if ($this->_can_manage_categories())
+		{
+			$this->form_validation->set_rules('update_id', 'Issue ID', 'trim|required|strip_tags|xss_clean|is_numeric');
+			$this->form_validation->set_rules('title', 'Issue Title', 'trim|required|strip_tags|xss_clean');
+			if($this->form_validation->run() == TRUE){
+				$data = array('title' => $this->input->post('title'));
+				if($this->projects_model->edit_issue($this->input->post('update_id'), $data)){
+					$this->data['error'] = false;
+					$this->data['message'] = $this->lang->line('updated_successfully')?$this->lang->line('updated_successfully'):"Updated successfully.";
+					echo json_encode($this->data);
+				}else{
+					$this->data['error'] = true;
+					$this->data['message'] = $this->lang->line('something_wrong_try_again')?$this->lang->line('something_wrong_try_again'):"Something wrong! Try again.";
+					echo json_encode($this->data);
+				}
+			}else{
+				$this->data['error'] = true;
+				$this->data['message'] = validation_errors();
+				echo json_encode($this->data);
+			}
+		}else{
+			$this->data['error'] = true;
+			$this->data['message'] = $this->lang->line('access_denied')?$this->lang->line('access_denied'):"Access Denied";
+			echo json_encode($this->data);
+		}
+	}
+
+	public function delete_issue($issue_id = '')
+	{
+		if ($this->_can_manage_categories())
+		{
+			if(empty($issue_id)){
+				$issue_id = $this->uri->segment(3)?$this->uri->segment(3):'';
+			}
+			if(!empty($issue_id) && is_numeric($issue_id) && $this->projects_model->delete_issue($issue_id)){
+				$this->data['error'] = false;
+				$this->data['message'] = $this->lang->line('deleted_successfully')?$this->lang->line('deleted_successfully'):"Deleted successfully.";
+				echo json_encode($this->data);
+			}else{
+				$this->data['error'] = true;
+				$this->data['message'] = $this->lang->line('something_wrong_try_again')?$this->lang->line('something_wrong_try_again'):"Something wrong! Try again.";
+				echo json_encode($this->data);
+			}
+		}else{
+			$this->data['error'] = true;
+			$this->data['message'] = $this->lang->line('access_denied')?$this->lang->line('access_denied'):"Access Denied";
+			echo json_encode($this->data);
+		}
+	}
+
 	public function tasks()
 	{
 		if ($this->ion_auth->logged_in() && is_module_allowed('tasks') && !$this->ion_auth->in_group(3) && ($this->ion_auth->is_admin() || permissions('task_view')))

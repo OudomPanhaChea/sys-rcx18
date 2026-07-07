@@ -1,0 +1,71 @@
+/* =====================================================================
+   RCX — BRAND THEME TOKENS  (single source of truth)
+   ---------------------------------------------------------------------
+   ▸ To re-brand the ENTIRE app, edit ONLY the two values in the
+     "BRAND COLORS" block below. Everything else (button hovers,
+     gradients, tints, borders, focus rings, the sidebar, badges…)
+     is derived from them automatically via color-mix().
+   ▸ --theme-color is kept as a backwards-compatible alias because it
+     is referenced ~390 times across the existing stylesheets.
+   ▸ The primary colour can ALSO be changed from the admin UI
+     (Settings ▸ General ▸ Theme Color). That picker overrides
+     --brand-primary at runtime; the derived palette follows along.
+   ===================================================================== */
+
+:root {
+
+  /* ---------------------------------------------------------------
+     1. BRAND COLORS  — the only two lines you normally need to edit
+     --------------------------------------------------------------- */
+  --brand-primary:   #304A59;   /* company primary  – slate blue   */
+  --brand-secondary: #142332;   /* company secondary – deep navy   */
+
+  /* Legacy alias — do not remove (used everywhere as var(--theme-color)) */
+  --theme-color: var(--brand-primary);
+
+  /* ---------------------------------------------------------------
+     2. PRIMARY — derived shades (auto-calculated)
+     --------------------------------------------------------------- */
+  --brand-primary-hover:    #273d49;
+  --brand-primary-hover:    color-mix(in srgb, var(--brand-primary) 84%, #000);
+  --brand-primary-active:   #22343e;
+  --brand-primary-active:   color-mix(in srgb, var(--brand-primary) 72%, #000);
+  --brand-primary-light:    #e6e9eb;   /* subtle tint  (tracks, hovers) */
+  --brand-primary-light:    color-mix(in srgb, var(--brand-primary) 12%, #fff);
+  --brand-primary-soft:     #f1f2f3;   /* faint tint   (row / panel bg)  */
+  --brand-primary-soft:     color-mix(in srgb, var(--brand-primary) 7%,  #fff);
+  --brand-primary-contrast: #ffffff;   /* text on primary            */
+
+  /* ---------------------------------------------------------------
+     3. SECONDARY — derived shades (auto-calculated)
+     --------------------------------------------------------------- */
+  --brand-secondary-hover:   #23303c;
+  --brand-secondary-hover:   color-mix(in srgb, var(--brand-secondary) 82%, #fff);
+  --brand-secondary-light:   #e3e5e8;
+  --brand-secondary-light:   color-mix(in srgb, var(--brand-secondary) 10%, #fff);
+  --brand-secondary-contrast:#ffffff;
+
+  /* ---------------------------------------------------------------
+     4. SIGNATURE GRADIENT  (navy → slate)  – headers / accents
+     --------------------------------------------------------------- */
+  --brand-gradient: linear-gradient(135deg, var(--brand-secondary) 0%, var(--brand-primary) 100%);
+
+  /* ---------------------------------------------------------------
+     5. SUPPORTING / SEMANTIC PALETTE
+        Harmonised to sit comfortably beside the slate-navy brand.
+        Exposed as tokens so future components can reference them.
+     --------------------------------------------------------------- */
+  --clr-success: #2f9e6f;
+  --clr-info:    #3aa6c9;
+  --clr-warning: #e0a021;
+  --clr-danger:  #d64550;
+
+  --clr-surface: #ffffff;   /* cards / panels            */
+  --clr-body-bg: #f4f6f8;   /* app background            */
+  --clr-border:  #e6eaee;   /* hairlines / dividers      */
+  --clr-muted:   #64748b;   /* secondary text            */
+
+  /* Translucent brand washes for focus rings / active states */
+  --brand-primary-ring: color-mix(in srgb, var(--brand-primary) 30%, transparent);
+  --brand-primary-wash: color-mix(in srgb, var(--brand-primary) 16%, transparent);
+}

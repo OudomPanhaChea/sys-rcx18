@@ -1786,7 +1786,7 @@ tr:first-child > td > .fc-day-grid-event {
   color: #fff;
 }
 .pricing.pricing-highlight .pricing-cta a:hover {
-  background-color: #ad00ad !important;
+  background-color: var(--brand-primary-active) !important;
 }
 .pricing .pricing-padding {
   padding: 40px;

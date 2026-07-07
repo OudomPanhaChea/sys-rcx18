@@ -314,7 +314,78 @@ class Projects_model extends CI_Model
         if($this->db->insert('projects', $data))
             return $this->db->insert_id();
         else
-            return false; 
+            return false;
+    }
+
+    /* ---------------- Project categories ---------------- */
+
+    function get_categories(){
+        $this->db->from('project_categories');
+        $this->db->where('saas_id', $this->session->userdata('saas_id'));
+        $this->db->order_by('title', 'ASC');
+        $data = $this->db->get()->result_array();
+        return $data ? $data : false;
+    }
+
+    function create_category($data){
+        if($this->db->insert('project_categories', $data))
+            return $this->db->insert_id();
+        else
+            return false;
+    }
+
+    function edit_category($category_id, $data){
+        $this->db->where('id', $category_id);
+        $this->db->where('saas_id', $this->session->userdata('saas_id'));
+        return $this->db->update('project_categories', $data);
+    }
+
+    function delete_category($category_id){
+        $saas_id = $this->session->userdata('saas_id');
+        // detach projects that use this category (and its issues)
+        $this->db->where('saas_id', $saas_id)->where('category_id', $category_id)
+                 ->update('projects', array('category_id' => NULL, 'issue_id' => NULL));
+        // remove the category's issues
+        $this->db->where('saas_id', $saas_id)->where('category_id', $category_id)
+                 ->delete('project_issues');
+        // remove the category
+        $this->db->where('id', $category_id)->where('saas_id', $saas_id);
+        return $this->db->delete('project_categories');
+    }
+
+    /* ---------------- Category issues ---------------- */
+
+    function get_issues($category_id = ''){
+        $this->db->from('project_issues');
+        $this->db->where('saas_id', $this->session->userdata('saas_id'));
+        if(!empty($category_id) && is_numeric($category_id)){
+            $this->db->where('category_id', $category_id);
+        }
+        $this->db->order_by('title', 'ASC');
+        $data = $this->db->get()->result_array();
+        return $data ? $data : false;
+    }
+
+    function create_issue($data){
+        if($this->db->insert('project_issues', $data))
+            return $this->db->insert_id();
+        else
+            return false;
+    }
+
+    function edit_issue($issue_id, $data){
+        $this->db->where('id', $issue_id);
+        $this->db->where('saas_id', $this->session->userdata('saas_id'));
+        return $this->db->update('project_issues', $data);
+    }
+
+    function delete_issue($issue_id){
+        $saas_id = $this->session->userdata('saas_id');
+        // detach projects that use this issue
+        $this->db->where('saas_id', $saas_id)->where('issue_id', $issue_id)
+                 ->update('projects', array('issue_id' => NULL));
+        $this->db->where('id', $issue_id)->where('saas_id', $saas_id);
+        return $this->db->delete('project_issues');
     }
 
     function create_task($data){
@@ -540,9 +611,21 @@ class Projects_model extends CI_Model
             $where .= " AND p.client_id = $client";
         }
 
+        if(isset($get['category']) &&  !empty($get['category']) && is_numeric($get['category'])){
+            $category = strip_tags($get['category']);
+            $where .= " AND p.category_id = $category";
+        }
+
+        if(isset($get['issue']) &&  !empty($get['issue']) && is_numeric($get['issue'])){
+            $issue = strip_tags($get['issue']);
+            $where .= " AND p.issue_id = $issue";
+        }
+
         $left_join = " LEFT JOIN projects p ON pu.project_id=p.id ";
         $left_join .= " LEFT JOIN project_status ps ON p.status=ps.id ";
-        
+        $left_join .= " LEFT JOIN project_categories pc ON p.category_id=pc.id ";
+        $left_join .= " LEFT JOIN project_issues pi ON p.issue_id=pi.id ";
+
         $query = $this->db->query("SELECT COUNT('p.id') as total FROM project_users pu $left_join $where GROUP BY pu.project_id");
         // echo $this->db->last_query();
         $res = $query->result_array();
@@ -550,9 +633,9 @@ class Projects_model extends CI_Model
              $total = count($res);
         // }
         
-        $query = $this->db->query("SELECT p.*,ps.title AS project_status,ps.class AS project_class FROM project_users pu $left_join $where GROUP BY pu.project_id ORDER BY ".$sort." ".$order." LIMIT ".$offset.", ".$limit);
+        $query = $this->db->query("SELECT p.*,ps.title AS project_status,ps.class AS project_class,pc.title AS category_title,pi.title AS issue_title FROM project_users pu $left_join $where GROUP BY pu.project_id ORDER BY ".$sort." ".$order." LIMIT ".$offset.", ".$limit);
 
-        $results = $query->result_array();  
+        $results = $query->result_array();
     
         $bulkData = array();
         $bulkData['total'] = $total;
@@ -563,6 +646,9 @@ class Projects_model extends CI_Model
 				$tempRow = $result;
             
                 $tempRow['title'] = '<a href="'.base_url('projects/detail/'.htmlspecialchars($result['id'])).'">'.htmlspecialchars($result['title']).'</a>';
+
+                $tempRow['category'] = $result['category_title'] ? '<span class="badge badge-light">'.htmlspecialchars($result['category_title']).'</span>' : '';
+                $tempRow['issue'] = $result['issue_title'] ? '<span class="badge badge-light">'.htmlspecialchars($result['issue_title']).'</span>' : '';
 
                 if($tempRow['project_status'] == 'Not Started'){
                     $tempRow['project_status'] = '<span class="mb-1 badge badge-'.htmlspecialchars($result['project_class']).'">
@@ -658,7 +744,7 @@ class Projects_model extends CI_Model
         print_r(json_encode($bulkData));
     }
     
-    function get_projects($user_id = '',$project_id = '',$limit='', $start='', $filter_type='', $filter=''){
+    function get_projects($user_id = '',$project_id = '',$limit='', $start='', $filter_type='', $filter='', $category='', $issue=''){
 
         if(!empty($limit)){
             $where_limit = ' LIMIT '.$limit;
@@ -700,9 +786,18 @@ class Projects_model extends CI_Model
         }
         $where .= empty($where)?" WHERE p.saas_id=".$this->session->userdata('saas_id'):" AND p.saas_id=".$this->session->userdata('saas_id');
 
+        if(!empty($category) && is_numeric($category)){
+            $where .= " AND p.category_id = $category ";
+        }
+        if(!empty($issue) && is_numeric($issue)){
+            $where .= " AND p.issue_id = $issue ";
+        }
+
         $left_join = " LEFT JOIN projects p ON pu.project_id=p.id ";
         $left_join .= " LEFT JOIN project_status ps ON p.status=ps.id ";
-        $query = $this->db->query("SELECT p.*,ps.title AS project_status,ps.class AS project_class FROM project_users pu $left_join $where GROUP BY pu.project_id $order $where_limit");
+        $left_join .= " LEFT JOIN project_categories pc ON p.category_id=pc.id ";
+        $left_join .= " LEFT JOIN project_issues pi ON p.issue_id=pi.id ";
+        $query = $this->db->query("SELECT p.*,ps.title AS project_status,ps.class AS project_class,pc.title AS category_title,pi.title AS issue_title FROM project_users pu $left_join $where GROUP BY pu.project_id $order $where_limit");
     
         $projects = $query->result_array();
 
@@ -723,6 +818,10 @@ class Projects_model extends CI_Model
             $days_count = count_days_btw_two_dates(date("Y-m-d"),$project['ending_date']);
             $temp[$key]['days_count'] = $days_count['days'];
             $temp[$key]['days_status'] = $days_count['days_status'];
+            // Signed remaining days from today to the deadline (raw date).
+            // Positive = days left, 0 = due today, negative = overdue. Used to
+            // colour-code the deadline strip on the project card by urgency.
+            $temp[$key]['days_remaining'] = (int) floor((strtotime($project['ending_date']) - strtotime(date("Y-m-d"))) / 86400);
             $temp[$key]['total_tasks'] = get_count('id','tasks','project_id='.$project['id']);
             $temp[$key]['completed_tasks'] = get_count('id','tasks','status = 4 and project_id='.$project['id']);
             if($project['client_id']){

@@ -4202,6 +4202,12 @@ $(document).on('click','.modal-edit-project',function(e){
 				$("#users").trigger('change');
 				$("#client").val(result['data'][0]['client_id']);
 				$("#client").trigger('change');
+
+				// Category + Issue (issue is loaded async by the .project-category-select cascade)
+				$("#issue_edit").attr('data-selected', (result['data'][0]['issue_id'] != null ? result['data'][0]['issue_id'] : ''));
+				$("#category_edit").val(result['data'][0]['category_id'] != null ? result['data'][0]['category_id'] : '');
+				$("#category_edit").trigger('change');
+
 	    		$("#modal-edit-project").trigger("click");
     		}else{
     			iziToast.error({
@@ -4291,6 +4297,208 @@ $("#modal-add-project").fireModal({
       }
     }
   ]
+});
+
+
+/* =====================================================================
+ *  Project Categories & Issues
+ * ===================================================================== */
+
+// -- Filter bar: merge a single query param onto the current URL (grid view)
+$(document).on('change', '.project_filter_param', function () {
+	var param = $(this).data('param');
+	var val = $(this).val();
+	var url = new URL(window.location.href);
+	// reset pagination (grid paginates via /projects/<page> URI segment)
+	url.pathname = url.pathname.replace(/\/projects\/\d+$/, '/projects');
+	if (val) { url.searchParams.set(param, val); } else { url.searchParams.delete(param); }
+	window.location.href = url.toString();
+});
+
+// -- Cascade: when a category is chosen on a project form, load its issues
+$(document).on('change', '.project-category-select', function () {
+	var target = $(this).data('issue-target'); // 'add' | 'edit'
+	var catId = $(this).val();
+	var $issue = (target === 'edit') ? $('.project-issue-select-edit') : $('.project-issue-select-add');
+	var preselect = $issue.attr('data-selected') || '';
+	var base_label = $issue.find('option[value=""]').first().text() || 'Select Issue';
+
+	if (!catId) {
+		$issue.html('<option value="">' + base_label + '</option>');
+		$issue.attr('data-selected', '');
+		return;
+	}
+
+	$.ajax({
+		type: 'POST',
+		url: base_url + 'projects/get_issues_by_category',
+		data: 'category_id=' + catId,
+		dataType: 'json',
+		success: function (res) {
+			var html = '<option value="">' + base_label + '</option>';
+			if (res['error'] === false && res['data']) {
+				$.each(res['data'], function (i, it) {
+					html += '<option value="' + it.id + '">' + $('<div>').text(it.title).html() + '</option>';
+				});
+			}
+			$issue.html(html);
+			if (preselect) { $issue.val(preselect); }
+			$issue.attr('data-selected', '');
+		}
+	});
+});
+
+// -- Manage Categories modal
+$("#modal-manage-categories").fireModal({
+	title: $("#manage-categories-part").data('title'),
+	body: $("#manage-categories-part"),
+	size: 'modal-lg',
+	footerClass: 'bg-whitesmoke',
+	autoFocus: false
+});
+
+function projectsRenderCategories(data) {
+	var wrap = $('#categories-list-container');
+	if (!data || !data.length) {
+		wrap.html('<div class="text-center text-muted py-3">' + (typeof no_data_found !== 'undefined' ? no_data_found : 'No categories yet.') + '</div>');
+		return;
+	}
+	var esc = function (s) { return $('<div>').text(s == null ? '' : s).html(); };
+	var html = '';
+	$.each(data, function (i, cat) {
+		var issues = '';
+		if (cat.issues && cat.issues.length) {
+			$.each(cat.issues, function (j, it) {
+				issues += '<div class="d-flex align-items-center issue-row py-1" data-id="' + it.id + '">' +
+					'<i class="fas fa-angle-right text-muted mr-2"></i>' +
+					'<span class="issue-title flex-fill">' + esc(it.title) + '</span>' +
+					'<button type="button" class="btn btn-sm btn-icon edit-issue-btn" data-id="' + it.id + '" data-title="' + esc(it.title) + '"><i class="fas fa-pen"></i></button>' +
+					'<button type="button" class="btn btn-sm btn-icon text-danger delete-issue-btn" data-id="' + it.id + '"><i class="fas fa-trash"></i></button>' +
+					'</div>';
+			});
+		}
+		html += '<div class="card mb-2 category-card" data-id="' + cat.id + '">' +
+			'<div class="card-body p-2">' +
+			'<div class="d-flex align-items-center">' +
+			'<span class="badge badge-' + esc(cat.class) + ' mr-2">&#9679;</span>' +
+			'<span class="category-title flex-fill font-weight-bold">' + esc(cat.title) + '</span>' +
+			'<button type="button" class="btn btn-sm btn-icon edit-category-btn" data-id="' + cat.id + '" data-title="' + esc(cat.title) + '" data-class="' + esc(cat.class) + '"><i class="fas fa-pen"></i></button>' +
+			'<button type="button" class="btn btn-sm btn-icon text-danger delete-category-btn" data-id="' + cat.id + '"><i class="fas fa-trash"></i></button>' +
+			'</div>' +
+			'<div class="issues-wrap mt-2 pl-4">' + issues +
+			'<div class="d-flex mt-1">' +
+			'<input type="text" class="form-control form-control-sm new-issue-input" data-category="' + cat.id + '" placeholder="Add issue (e.g. Account Banned)">' +
+			'<button type="button" class="btn btn-sm btn-primary ml-1 add-issue-btn" data-category="' + cat.id + '"><i class="fas fa-plus"></i></button>' +
+			'</div>' +
+			'</div>' +
+			'</div></div>';
+	});
+	wrap.html(html);
+}
+
+function projectsLoadCategories() {
+	$('#categories-list-container').html('<div class="text-center text-muted py-3"><i class="fas fa-spinner fa-spin"></i></div>');
+	$.ajax({
+		type: 'POST',
+		url: base_url + 'projects/get_categories_list',
+		dataType: 'json',
+		success: function (res) {
+			if (res['error'] === false) { projectsRenderCategories(res['data']); }
+		}
+	});
+}
+
+// load list whenever the manage modal is opened
+$(document).on('click', '#modal-manage-categories', function () { projectsLoadCategories(); });
+
+function projectsToast(res) {
+	if (res['error'] === false) {
+		iziToast.success({ title: res['message'] || '', position: 'topRight' });
+	} else {
+		iziToast.error({ title: res['message'] || (typeof something_wrong_try_again !== 'undefined' ? something_wrong_try_again : 'Error'), position: 'topRight' });
+	}
+}
+
+// add category
+$(document).on('click', '.add-category-btn', function () {
+	var title = $.trim($('#new_category_title').val());
+	var cls = $('#new_category_class').val();
+	if (!title) { $('#new_category_title').focus(); return; }
+	$.ajax({
+		type: 'POST', url: base_url + 'projects/create_category', dataType: 'json',
+		data: { title: title, class: cls },
+		success: function (res) {
+			projectsToast(res);
+			if (res['error'] === false) { $('#new_category_title').val(''); projectsLoadCategories(); }
+		}
+	});
+});
+$(document).on('keypress', '#new_category_title', function (e) { if (e.which === 13) { e.preventDefault(); $('.add-category-btn').click(); } });
+
+// edit category (rename / recolour)
+$(document).on('click', '.edit-category-btn', function () {
+	var id = $(this).data('id');
+	var current = $(this).data('title');
+	var cls = $(this).data('class');
+	var title = window.prompt('Category name:', current);
+	if (title === null) { return; }
+	title = $.trim(title);
+	if (!title) { return; }
+	$.ajax({
+		type: 'POST', url: base_url + 'projects/edit_category', dataType: 'json',
+		data: { update_id: id, title: title, class: cls },
+		success: function (res) { projectsToast(res); if (res['error'] === false) { projectsLoadCategories(); } }
+	});
+});
+
+// delete category
+$(document).on('click', '.delete-category-btn', function () {
+	var id = $(this).data('id');
+	if (!window.confirm('Delete this category and all its issues? Projects using it will be untagged.')) { return; }
+	$.ajax({
+		type: 'POST', url: base_url + 'projects/delete_category/' + id, dataType: 'json',
+		success: function (res) { projectsToast(res); if (res['error'] === false) { projectsLoadCategories(); } }
+	});
+});
+
+// add issue
+$(document).on('click', '.add-issue-btn', function () {
+	var catId = $(this).data('category');
+	var $input = $('.new-issue-input[data-category="' + catId + '"]');
+	var title = $.trim($input.val());
+	if (!title) { $input.focus(); return; }
+	$.ajax({
+		type: 'POST', url: base_url + 'projects/create_issue', dataType: 'json',
+		data: { category_id: catId, title: title },
+		success: function (res) { projectsToast(res); if (res['error'] === false) { projectsLoadCategories(); } }
+	});
+});
+$(document).on('keypress', '.new-issue-input', function (e) {
+	if (e.which === 13) { e.preventDefault(); $('.add-issue-btn[data-category="' + $(this).data('category') + '"]').click(); }
+});
+
+// edit issue
+$(document).on('click', '.edit-issue-btn', function () {
+	var id = $(this).data('id');
+	var title = window.prompt('Issue name:', $(this).data('title'));
+	if (title === null) { return; }
+	title = $.trim(title);
+	if (!title) { return; }
+	$.ajax({
+		type: 'POST', url: base_url + 'projects/edit_issue', dataType: 'json',
+		data: { update_id: id, title: title },
+		success: function (res) { projectsToast(res); if (res['error'] === false) { projectsLoadCategories(); } }
+	});
+});
+
+// delete issue
+$(document).on('click', '.delete-issue-btn', function () {
+	var id = $(this).data('id');
+	if (!window.confirm('Delete this issue? Projects using it will be untagged.')) { return; }
+	$.ajax({
+		type: 'POST', url: base_url + 'projects/delete_issue/' + id, dataType: 'json',
+		success: function (res) { projectsToast(res); if (res['error'] === false) { projectsLoadCategories(); } }
+	});
 });
 
 

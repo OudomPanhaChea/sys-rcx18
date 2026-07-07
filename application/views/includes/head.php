@@ -87,6 +87,10 @@ if($my_current_lang){
   <link rel="stylesheet" href="<?=base_url('assets/modules/codemirror/lib/codemirror.css');?>">
   <link rel="stylesheet" href="<?=base_url('assets/modules/codemirror/theme/duotone-dark.css');?>">
 
+  <!-- Brand theme tokens (single source of truth) — load first so
+       everything below can derive from --brand-primary / --brand-secondary -->
+  <link rel="stylesheet" href="<?=base_url('assets/css/theme.css')?>">
+
   <!-- Template CSS -->
   <?php if($rtl){ ?>
   <link rel="stylesheet" href="<?=base_url('assets/css/rtl/style.css')?>">
@@ -97,9 +101,11 @@ if($my_current_lang){
   <link rel="stylesheet" href="<?=base_url('assets/css/components.css')?>">
   <link rel="stylesheet" href="<?=base_url('assets/css/custom.css')?>">
   <?php } ?>
-  
+
+  <!-- Runtime override: the admin Theme Color picker feeds --brand-primary.
+       The whole derived palette in theme.css follows it automatically. -->
   <style>
-      :root{--theme-color: <?=theme_color()?>;}
+      :root{--brand-primary: <?=theme_color()?>; --theme-color: var(--brand-primary);}
   </style>
 
 <?php $google_analytics = google_analytics(); if($google_analytics){ ?>

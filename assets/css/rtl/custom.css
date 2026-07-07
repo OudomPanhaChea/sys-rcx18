@@ -1,5 +1,5 @@
 .progress{
-    background-color: #ff87b1;
+    background-color: var(--brand-primary-light);
 }
 
 .author-box-job .badge {
@@ -20,7 +20,7 @@
 
 .gantt .bar{
     fill: var(--theme-color) !important;
-    stroke: #3e003e !important;
+    stroke: var(--brand-primary-active) !important;
 }
 
 .gantt .bar-progress{
@@ -136,4 +136,19 @@ font-weight: 600;
 .tasks .card {
 white-space: normal;
 margin-top: 1rem;
+}
+
+/* Project card deadline strip — RTL mirror (see custom.css for full spec) */
+.project-deadline-pill {
+  margin-left: 0;
+  margin-right: auto;
+}
+
+/* Project card — RTL mirror (overlapping avatar stack) */
+.project-card__avatars {
+  padding-left: 0;
+  padding-right: 6px;
+}
+.project-card__avatar {
+  margin: 0 -8px 0 0 !important;
 }

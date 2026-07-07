@@ -1,149 +1,713 @@
-.progress{
-    background-color: #ff87b1;
+.progress {
+  background-color: var(--brand-primary-light);
 }
 
 .author-box-job .badge {
-    padding: 4px 9px;
+  padding: 4px 9px;
 }
 
 .tickets .ticket-content {
-    width: 100%;
+  width: 100%;
 }
 
 .imagecheck-image {
-    height: 324px;
+  height: 324px;
 }
 
-.description-wrapper{
-    white-space: pre-wrap;
+.description-wrapper {
+  white-space: pre-wrap;
 }
 
-.gantt .bar{
-    fill: var(--theme-color) !important;
-    stroke: #3e003e !important;
+.gantt .bar {
+  fill: var(--theme-color) !important;
+  stroke: var(--brand-primary-active) !important;
 }
 
-.gantt .bar-progress{
-    fill: #0056b3 !important;
+.gantt .bar-progress {
+  fill: #0056b3 !important;
 }
 
 .sidebar-menu {
-    font-size: 16px;
+  font-size: 16px;
 }
 
 .back-to-top {
-    position: fixed;
-    bottom: 25px;
-    right: 25px;
-    display: none;
-    z-index: 1;
-} 
+  position: fixed;
+  bottom: 25px;
+  right: 25px;
+  display: none;
+  z-index: 1;
+}
 
-.paymet-box{
-    margin: 3px;
-    padding: 3px;
-    border: 3px solid #0d1137;
-    border-radius: 5px;
+.paymet-box {
+  margin: 3px;
+  padding: 3px;
+  border: 3px solid #0d1137;
+  border-radius: 5px;
 }
 
 .cursor-pointer {
-    cursor: pointer;
+  cursor: pointer;
 }
 .text-strike {
-    text-decoration: line-through;
+  text-decoration: line-through;
 }
 
-.profile-widget .profile-widget-picture{
-    height: 100px;
+.profile-widget .profile-widget-picture {
+  height: 100px;
 }
 
-.navbar .nav-link.nav-link-user img{
-    height: 30px;
+.navbar .nav-link.nav-link-user img {
+  height: 30px;
 }
-.profile-widget-header .avatar-item .avatar-badge{
-    z-index: 1;
-    bottom: -65px;
-    right: 3px;
-    line-height: 30px;
-    width: 30px;
-    height: 30px;
-    background-color: #6777ef;
+.profile-widget-header .avatar-item .avatar-badge {
+  z-index: 1;
+  bottom: -65px;
+  right: 3px;
+  line-height: 30px;
+  width: 30px;
+  height: 30px;
+  background-color: #6777ef;
 }
 
-.user-avatar.avatar.avatar-xl{
-    font-size: 45px;
-    height: 100px;
-    width: 100px;
+.user-avatar.avatar.avatar-xl {
+  font-size: 45px;
+  height: 100px;
+  width: 100px;
 }
 
 .select2-container {
-    display: block !important;
-    width: 100% !important;
+  display: block !important;
+  width: 100% !important;
 }
 
-.system-logos{
-	max-width: 100%;
-    max-height: 100%;
+.system-logos {
+  max-width: 100%;
+  max-height: 100%;
 }
 
-.navbar-logos{
-    padding: 10px;
-    width: auto;
-    height: auto;
-    max-height: 59px;
+.navbar-logos {
+  padding: 10px;
+  width: auto;
+  height: auto;
+  max-height: 59px;
 }
 
-.code img{
-    width: 100%;
-    height: auto;
-    padding: 25px;
+.code img {
+  width: 100%;
+  height: auto;
+  padding: 25px;
 }
 
-.range{
-    padding: 10px 0px !important;
+.range {
+  padding: 10px 0px !important;
 }
 
-.kanban .dropdown-toggle{
-    outline: none;
+.kanban .dropdown-toggle {
+  outline: none;
 }
-.kanban .dropdown-toggle:after{
-display: none;
+.kanban .dropdown-toggle:after {
+  display: none;
 }
 .kanban {
-display: block;
-white-space: nowrap;
-overflow-x: auto;
+  display: block;
+  white-space: nowrap;
+  overflow-x: auto;
 }
 .tasks.tasks:not(:last-child) {
-margin-right: 0.25rem;
+  margin-right: 0.25rem;
 }
 .tasks {
-    display: inline-block;
-    width: 17rem;
-    padding: 0 0.5rem 0.5rem 0.5rem;
-    border: 1px solid var(--theme-color);
-    vertical-align: top;
-    margin-bottom: 30px;
-    border-radius: 0.5rem;
+  display: inline-block;
+  width: 17rem;
+  padding: 0 0.5rem 0.5rem 0.5rem;
+  border: 1px solid var(--theme-color);
+  vertical-align: top;
+  margin-bottom: 30px;
+  border-radius: 0.5rem;
 }
 .tasks .task-header {
-    color: #9ca3a9;
-    padding: 0.5rem;
-    font-weight: bold;
+  color: #9ca3a9;
+  padding: 0.5rem;
+  font-weight: bold;
 }
 .task-list-items {
-min-height: 100px;
-position: relative;
+  min-height: 100px;
+  position: relative;
 }
 .task-list-items:before {
-content: "No Tasks";
-position: absolute;
-line-height: 110px;
-width: 100%;
-text-align: center;
-font-weight: 600;
+  content: "No Tasks";
+  position: absolute;
+  line-height: 110px;
+  width: 100%;
+  text-align: center;
+  font-weight: 600;
 }
 .tasks .card {
-white-space: normal;
-margin-top: 1rem;
+  white-space: normal;
+  margin-top: 1rem;
+}
+
+/* =====================================================================
+   PROJECT CARD — DEADLINE STRIP
+   Sits at the very end of the project card and auto colour-codes itself
+   by how close the ending date is. Colours are driven by the semantic
+   tokens in theme.css so they stay in step with the brand palette.
+   ===================================================================== */
+.project-deadline {
+  --deadline-color: var(--clr-success, #2f9e6f);
+  margin-top: 1.15rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--clr-border, #e6eaee);
+}
+.project-deadline.is-approaching {
+  --deadline-color: var(--clr-info, #3aa6c9);
+}
+.project-deadline.is-soon {
+  --deadline-color: var(--clr-warning, #e0a021);
+}
+.project-deadline.is-critical,
+.project-deadline.is-today,
+.project-deadline.is-overdue {
+  --deadline-color: var(--clr-danger, #d64550);
+}
+
+.project-deadline-row {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+}
+
+.project-deadline-icon {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  font-size: 0.85rem;
+  color: var(--deadline-color);
+  background: color-mix(in srgb, var(--deadline-color) 14%, transparent);
+}
+
+.project-deadline-meta {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.25;
+  min-width: 0;
+}
+.project-deadline-label {
+  font-size: 0.62rem;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  font-weight: 700;
+  color: var(--clr-muted, #64748b);
+}
+.project-deadline-date {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: color-mix(in srgb, var(--clr-muted, #64748b) 55%, #000);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.project-deadline-pill {
+  margin-left: auto;
+  flex: 0 0 auto;
+  padding: 0.3rem 0.65rem;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  white-space: nowrap;
+  color: var(--deadline-color);
+  background: color-mix(in srgb, var(--deadline-color) 12%, transparent);
+  border: 1px solid color-mix(in srgb, var(--deadline-color) 34%, transparent);
+}
+
+.project-deadline-track {
+  display: block;
+  margin-top: 0.7rem;
+  height: 4px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--clr-muted, #64748b) 15%, transparent);
+  overflow: hidden;
+}
+.project-deadline-bar {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--deadline-color);
+  transition: width 0.5s ease;
+}
+
+/* Urgent deadlines gently pulse to pull the eye */
+.project-deadline.is-critical .project-deadline-icon,
+.project-deadline.is-today .project-deadline-icon,
+.project-deadline.is-overdue .project-deadline-icon {
+  animation: deadlinePulse 1.8s ease-in-out infinite;
+}
+@keyframes deadlinePulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0
+      color-mix(in srgb, var(--deadline-color) 45%, transparent);
+  }
+  50% {
+    box-shadow: 0 0 0 6px
+      color-mix(in srgb, var(--deadline-color) 0%, transparent);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .project-deadline-icon {
+    animation: none !important;
+  }
+}
+
+/* =====================================================================
+   PROJECT GRID — even, gapped, responsive layout for the card row
+   Replaces Bootstrap's gutter/negative-margin spacing with a CSS grid
+   so every card is separated by a consistent gap on BOTH axes.
+   ===================================================================== */
+.projects-grid.row {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 26px;
+  margin: 0; /* cancel Bootstrap .row negative margins */
+  align-items: stretch;
+}
+.projects-grid.row > [class*="col-"] {
+  width: auto;
+  max-width: none;
+  flex: 0 0 auto;
+  padding: 0; /* gap handles spacing instead of gutters */
+  margin: 0;
+}
+.projects-grid .project-card.card {
+  margin-bottom: 0; /* gap owns the vertical rhythm now */
+}
+@media (max-width: 575.98px) {
+  .projects-grid.row {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* =====================================================================
+   PROJECT CARD — full component (grid view /projects)
+   Refined project-management card: clear hierarchy, chip metadata,
+   overlapping team stack, labelled progress, urgency deadline footer.
+   All colour derives from the brand tokens in theme.css.
+   ===================================================================== */
+.project-card {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow: hidden;
+  border-radius: 12px;
+  border-top-width: 3px;
+  transition:
+    transform 0.28s cubic-bezier(0.2, 0.7, 0.3, 1),
+    box-shadow 0.28s ease;
+  animation: projectCardIn 0.5s cubic-bezier(0.2, 0.7, 0.3, 1) both;
+}
+.project-card > .card-body {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  padding: 20px 22px 18px;
+}
+.project-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 18px 34px -18px rgba(20, 35, 50, 0.35);
+}
+
+/* staggered entrance for the first row of cards */
+.project-card {
+  animation-delay: 0.02s;
+}
+.col-md-6:nth-child(2) .project-card,
+.col-xl-4:nth-child(2) .project-card {
+  animation-delay: 0.08s;
+}
+.col-md-6:nth-child(3) .project-card,
+.col-xl-4:nth-child(3) .project-card {
+  animation-delay: 0.14s;
+}
+@keyframes projectCardIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* --- header: status pill + kebab menu --- */
+.project-card__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin-bottom: 0.55rem;
+}
+.project-card__status {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.34rem 0.7rem;
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  border-radius: 999px;
+  border: 1px solid transparent;
+}
+.project-card__status .fa-circle {
+  font-size: 0.5rem;
+}
+
+.project-card__menu {
+  line-height: 0;
+  margin-left: auto;
+}
+.project-card__cog {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+  color: var(--clr-muted, #64748b);
+  background: transparent;
+  transition:
+    background 0.18s ease,
+    color 0.18s ease;
+}
+.project-card__cog:hover,
+.project-card__menu.show .project-card__cog {
+  background: var(--brand-primary-soft, #f1f2f3);
+  color: var(--brand-primary, #304a59);
+}
+.project-card .dropdown-menu {
+  border: 1px solid var(--clr-border, #e6eaee);
+  border-radius: 10px;
+  box-shadow: 0 14px 30px -12px rgba(20, 35, 50, 0.28);
+  padding: 0.35rem;
+}
+.project-card .dropdown-item {
+  border-radius: 7px;
+  font-size: 0.85rem;
+  padding: 0.45rem 0.7rem;
+}
+
+/* --- title + client --- */
+.project-card__title {
+  margin: 0 0 0.2rem;
+  font-size: 1.12rem;
+  font-weight: 700;
+  line-height: 1.3;
+  letter-spacing: -0.01em;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.project-card__title a {
+  color: var(--brand-secondary, #142332);
+  transition: color 0.18s ease;
+}
+.project-card__title a:hover {
+  color: var(--brand-primary, #304a59);
+}
+
+.project-card__client {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.38rem;
+  font-size: 0.8rem;
+  font-weight: 500;
+  color: var(--clr-muted, #64748b);
+  margin-bottom: 0.6rem;
+}
+.project-card__client .fa-user-circle {
+  color: var(--brand-primary, #304a59);
+  opacity: 0.8;
+}
+
+/* --- description (2-line clamp, steady height) --- */
+.project-card__desc {
+  margin: 0 0 1.1rem;
+  font-size: 0.86rem;
+  line-height: 1.55;
+  color: var(--clr-muted, #64748b);
+  min-height: 2.66em;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.project-card__desc.is-empty {
+  font-style: italic;
+  opacity: 0.7;
+}
+
+/* --- progress --- */
+.project-card__progress {
+  margin-bottom: 1rem;
+}
+.project-card__progress-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  margin-bottom: 0.45rem;
+}
+.project-card__subtitle {
+  font-size: 0.64rem;
+  font-weight: 700;
+  letter-spacing: 0.11em;
+  text-transform: uppercase;
+  color: var(--clr-muted, #64748b);
+}
+.project-card__progress-meta {
+  font-size: 0.74rem;
+  color: var(--clr-muted, #64748b);
+}
+.project-card__progress-meta strong {
+  color: var(--brand-primary, #304a59);
+}
+
+.project-card .progress {
+  height: 7px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--clr-muted, #64748b) 14%, transparent);
+  overflow: hidden;
+}
+.project-card .progress-bar {
+  border-radius: 999px;
+  background: var(--brand-gradient, linear-gradient(135deg, #142332, #304a59));
+  transition: width 0.8s cubic-bezier(0.2, 0.7, 0.3, 1);
+}
+
+/* --- footer (team + deadline), pinned to bottom for equal-height cards --- */
+.project-card__footer {
+  margin-top: auto;
+}
+
+.project-card__team {
+  margin-bottom: 0.2rem;
+}
+.project-card__avatars {
+  display: flex;
+  align-items: center;
+  padding-left: 6px;
+}
+.project-card__avatar {
+  margin: 0 0 0 -8px !important;
+  border: 2px solid var(--clr-surface, #fff);
+  box-shadow: 0 1px 3px rgba(20, 35, 50, 0.14);
+  transition: transform 0.18s ease;
+  cursor: default;
+}
+.project-card__avatars:hover .project-card__avatar {
+  opacity: 0.55;
+}
+.project-card__avatars .project-card__avatar:hover {
+  opacity: 1;
+  transform: translateY(-3px) scale(1.06);
+  z-index: 3;
+}
+.project-card__avatar--more {
+  background: var(--brand-primary-light, #e6e9eb);
+  color: var(--brand-primary, #304a59);
+  font-weight: 700;
+  font-size: 10px !important;
+}
+
+/* deadline strip already defined above — trim its top gap inside the footer */
+.project-card__footer .project-deadline {
+  margin-top: 0.85rem;
+}
+/* =====================================================================
+   PROJECTS — FILTER TOOLBAR, CATEGORY STAT CHIPS & VIEW TOGGLE
+   ---------------------------------------------------------------------
+   Declutters the old wall of full-width <select> filters. Category
+   becomes a scannable strip of clickable "stat" chips (dot · name ·
+   count); the remaining filters collapse into one compact toolbar.
+   All colours derive from the brand tokens in theme.css.
+   ===================================================================== */
+
+/* ---- Category stat chips ------------------------------------------- */
+.category-stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin: 0 0 1rem;
+}
+.category-stat {
+  --stat-accent: var(--brand-primary, #304a59);
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.42rem 0.8rem;
+  border: 1px solid var(--clr-border, #e6eaee);
+  border-radius: 999px;
+  background: var(--clr-surface, #fff);
+  color: var(--brand-secondary, #142332);
+  font-size: 0.82rem;
+  font-weight: 600;
+  line-height: 1;
+  text-decoration: none;
+  cursor: pointer;
+  transition:
+    border-color 0.18s ease,
+    box-shadow 0.18s ease,
+    transform 0.18s ease,
+    background-color 0.18s ease,
+    color 0.18s ease;
+}
+.category-stat:hover {
+  border-color: color-mix(
+    in srgb,
+    var(--stat-accent) 45%,
+    var(--clr-border, #e6eaee)
+  );
+  box-shadow: 0 4px 12px rgba(20, 35, 50, 0.09);
+  transform: translateY(-1px);
+  text-decoration: none;
+  color: var(--brand-secondary, #142332);
+}
+.category-stat__dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--stat-accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--stat-accent) 18%, transparent);
+  flex: 0 0 auto;
+}
+.category-stat__label {
+  white-space: nowrap;
+  padding: 0.05rem;
+}
+.category-stat__count {
+  width: 1.35rem;
+  height: 1.35rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--stat-accent) 12%, #fff);
+  color: var(--stat-accent);
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-align: center;
+}
+.category-stat.is-all {
+  --stat-accent: var(--brand-primary, #304a59);
+}
+
+/* active chip — filled with its own accent */
+.category-stat.active {
+  background: var(--stat-accent);
+  border-color: var(--stat-accent);
+  color: #fff;
+  box-shadow: 0 6px 16px color-mix(in srgb, var(--stat-accent) 32%, transparent);
+}
+.category-stat.active .category-stat__dot {
+  background: #fff;
+  box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.25);
+}
+.category-stat.active .category-stat__count {
+  background: rgba(255, 255, 255, 0.22);
+  color: #fff;
+}
+
+/* per-category accent (matches the badge colour picked in Manage Categories) */
+.category-stat.cat-primary {
+  --stat-accent: var(--brand-primary, #304a59);
+}
+.category-stat.cat-info {
+  --stat-accent: var(--clr-info, #3aa6c9);
+}
+.category-stat.cat-success {
+  --stat-accent: var(--clr-success, #2f9e6f);
+}
+.category-stat.cat-warning {
+  --stat-accent: var(--clr-warning, #e0a021);
+}
+.category-stat.cat-danger {
+  --stat-accent: var(--clr-danger, #d64550);
+}
+.category-stat.cat-secondary {
+  --stat-accent: var(--clr-muted, #64748b);
+}
+
+/* ---- Compact filter toolbar --------------------------------------- */
+.projects-filterbar {
+  padding: 0.85rem;
+  margin-bottom: 1.25rem;
+  background: var(--clr-surface, #fff);
+  border-radius: 12px;
+  box-shadow: 0 1px 2px rgba(20, 35, 50, 0.04);
+}
+.projects-filterbar__row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.65rem;
+}
+.projects-filterbar__field {
+  flex: 1 1 180px;
+  min-width: 150px;
+  margin: 0;
+}
+.projects-filterbar__field--grow {
+  flex: 2 1 240px;
+}
+/* let select2 fill its flex cell */
+.projects-filterbar__field .select2-container {
+  width: 100% !important;
+}
+
+/* ---- Icon view toggle (List / Grid) ------------------------------- */
+.view-toggle .btn {
+  width: 38px;
+  padding-left: 0;
+  padding-right: 0;
+  text-align: center;
+}
+.view-toggle .btn i {
+  margin: 0;
+}
+/* Active view button: use the brand primary, not the default blue glow/ring */
+.view-toggle .btn-primary,
+.view-toggle .btn.active,
+.view-toggle .btn-primary:focus,
+.view-toggle .btn-primary.active:focus {
+  background-color: var(--brand-primary) !important;
+  border-color: var(--brand-primary) !important;
+  color: var(--brand-primary-contrast, #fff) !important;
+  box-shadow: none !important;
+}
+.view-toggle .btn-primary:hover,
+.view-toggle .btn.active:hover {
+  background-color: var(--brand-primary-active) !important;
+  border-color: var(--brand-primary-active) !important;
+}
+
+@media (max-width: 575.98px) {
+  .category-stats {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    padding-bottom: 0.35rem;
+    scrollbar-width: thin;
+  }
+  .category-stat {
+    flex: 0 0 auto;
+  }
+  .projects-filterbar__field {
+    flex-basis: 100%;
+  }
 }
