@@ -15,3 +15,11 @@
 /application/logs/*.php
 /application/cache/*
 !/application/cache/index.html
+
+# --- Local-only dev files (must NOT reach production) ------------------------
+# Presence of this flag makes database.php use the local XAMPP DB.
+/application/config/is_local.flag
+# Dev router for PHP's built-in server (php -S). Not used by Apache.
+/router.php
+# Double-click launcher for local development.
+/start-local.bat

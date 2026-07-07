@@ -73,12 +73,38 @@ defined('BASEPATH') OR exit('No direct script access allowed');
 $active_group = 'default';
 $query_builder = TRUE;
 
+/*
+| -------------------------------------------------------------------
+| ENVIRONMENT AUTO-DETECTION (local vs. production)
+| -------------------------------------------------------------------
+| If the marker file  application/config/is_local.flag  exists we use the
+| LOCAL (XAMPP) database. That file is git-ignored and must NEVER be uploaded
+| to Hostinger, so the live server automatically falls back to PRODUCTION.
+| Result: this file is safe to commit and deploy as-is.
+*/
+if (file_exists(APPPATH.'config/is_local.flag'))
+{
+	// Local development (XAMPP)
+	$db_host = 'localhost';
+	$db_user = 'root';
+	$db_pass = '';
+	$db_name = 'rcx_sys';
+}
+else
+{
+	// Live server (Hostinger)
+	$db_host = 'localhost';
+	$db_user = 'u189356587_sys';
+	$db_pass = 'Roth@168';
+	$db_name = 'u189356587_sys';
+}
+
 $db['default'] = array(
 	'dsn'	=> '',
-	'hostname' => 'localhost',
-	'username' => 'u189356587_sys',
-	'password' => 'Roth@168',
-	'database' => 'u189356587_sys',
+	'hostname' => $db_host,
+	'username' => $db_user,
+	'password' => $db_pass,
+	'database' => $db_name,
 	'dbdriver' => 'mysqli',
 	'dbprefix' => '',
 	'pconnect' => FALSE,
