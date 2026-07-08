@@ -1520,6 +1520,234 @@ class Projects extends CI_Controller
 		}
 	}
 
+	/**
+	 * Report Assistant page. Lists the tenant's projects (optionally filtered
+	 * by category / issue) with the TikTok @handle and linked email/phone
+	 * pulled out of each project's title/description, ready for the AI to turn
+	 * into a copy-paste report message.
+	 */
+	public function report_assistant()
+	{
+		if ($this->ion_auth->logged_in() && is_module_allowed('projects') && !$this->ion_auth->in_group(3) && ($this->ion_auth->is_admin() || permissions('project_view')))
+		{
+			$this->data['page_title'] = 'Report Assistant - '.company_name();
+			$this->data['current_user'] = $this->ion_auth->user()->row();
+
+			$this->data['project_categories'] = project_categories();
+
+			$category_filter = (isset($_GET['category']) && !empty($_GET['category']) && is_numeric($_GET['category'])) ? $_GET['category'] : '';
+			$issue_filter    = (isset($_GET['issue']) && !empty($_GET['issue']) && is_numeric($_GET['issue'])) ? $_GET['issue'] : '';
+
+			$this->data['project_issues']  = project_issues($category_filter);
+			$this->data['category_filter'] = $category_filter;
+			$this->data['issue_filter']    = $issue_filter;
+
+			// Per-user AI config (each user brings their own Gemini key). Only
+			// show the user's OWN key in the setup box, never the shared fallback.
+			$has_own = user_has_own_ai_key();
+			$this->data['has_own_ai_key'] = $has_own;
+			$this->data['ai_api_key'] = '';
+			$this->data['ai_model']   = 'gemini-2.5-flash';
+			if($has_own){
+				$own = get_ai_settings($this->session->userdata('user_id'));
+				$this->data['ai_api_key'] = (!empty($own->api_key)) ? $own->api_key : '';
+				$this->data['ai_model']   = (!empty($own->model)) ? $own->model : 'gemini-2.5-flash';
+			}
+			// Effective key presence (own or shared fallback) — enables generation.
+			$this->data['ai_key_present'] = (ai_api_key() !== '');
+
+			if($this->ion_auth->is_admin()){
+				$projects = $this->projects_model->get_projects('', '', '', '', '', '', $category_filter, $issue_filter);
+			}else{
+				$projects = $this->projects_model->get_projects($this->session->userdata('user_id'), '', '', '', '', '', $category_filter, $issue_filter);
+			}
+
+			// Attach the extracted username + linked account to each project so
+			// the view can render them without repeating the parsing.
+			$rows = array();
+			if(!empty($projects)){
+				foreach($projects as $project){
+					$project['tiktok_username'] = extract_tiktok_username($project['title']);
+					$project['linked_account']  = extract_linked_account($project['description']);
+					$rows[] = $project;
+				}
+			}
+			$this->data['projects'] = $rows;
+
+			$this->load->view('report-assistant', $this->data);
+		}else{
+			redirect('auth', 'refresh');
+		}
+	}
+
+	/**
+	 * AJAX: generate a unique TikTok report/appeal message for one project
+	 * using the configured AI provider. Returns JSON {error, message, text}.
+	 */
+	public function generate_report_message()
+	{
+		if ($this->ion_auth->logged_in() && is_module_allowed('projects') && !$this->ion_auth->in_group(3) && ($this->ion_auth->is_admin() || permissions('project_view')))
+		{
+			$this->form_validation->set_rules('project_id', 'Project ID', 'trim|required|strip_tags|xss_clean|is_numeric');
+
+			if($this->form_validation->run() == FALSE){
+				$this->data['error'] = true;
+				$this->data['message'] = validation_errors();
+				echo json_encode($this->data);
+				return;
+			}
+
+			if(ai_api_key() === ''){
+				$this->data['error'] = true;
+				$this->data['message'] = $this->lang->line('ai_not_configured') ? $this->lang->line('ai_not_configured') : 'Add your own AI API key first (the key icon at the top of this page).';
+				echo json_encode($this->data);
+				return;
+			}
+
+			$project_id = $this->input->post('project_id');
+			$project = $this->projects_model->get_projects('', $project_id);
+
+			if(empty($project) || !isset($project[0])){
+				$this->data['error'] = true;
+				$this->data['message'] = 'Project not found.';
+				echo json_encode($this->data);
+				return;
+			}
+			$project = $project[0];
+
+			// Tenant isolation: never let a user generate for another tenant's project.
+			if(isset($project['saas_id']) && $project['saas_id'] != $this->session->userdata('saas_id')){
+				$this->data['error'] = true;
+				$this->data['message'] = $this->lang->line('access_denied') ? $this->lang->line('access_denied') : 'Access Denied';
+				echo json_encode($this->data);
+				return;
+			}
+
+			$username = extract_tiktok_username($project['title']);
+			$linked   = extract_linked_account($project['description']);
+			$category = !empty($project['category_title']) ? $project['category_title'] : 'TikTok';
+			$issue    = !empty($project['issue_title']) ? $project['issue_title'] : 'Account Banned';
+
+			$prompt = $this->build_report_prompt($username, $linked, $category, $issue);
+
+			$result = ai_generate_text($prompt, 1.15);
+
+			if($result['error']){
+				$this->data['error'] = true;
+				$this->data['message'] = $result['message'];
+				echo json_encode($this->data);
+				return;
+			}
+
+			$this->data['error'] = false;
+			$this->data['message'] = 'Success';
+			$this->data['text'] = $result['text'];
+			echo json_encode($this->data);
+		}else{
+			$this->data['error'] = true;
+			$this->data['message'] = $this->lang->line('access_denied') ? $this->lang->line('access_denied') : 'Access Denied';
+			echo json_encode($this->data);
+		}
+	}
+
+	/**
+	 * Assemble the AI prompt for one report message. A random nonce plus an
+	 * explicit "make it unique" instruction keeps every project's message
+	 * differently worded even for the same issue.
+	 */
+	private function build_report_prompt($username, $linked, $category, $issue)
+	{
+		$account = ($username !== '') ? $username : 'my account';
+
+		$contact_bits = array();
+		if(!empty($linked['email'])){ $contact_bits[] = 'email '.$linked['email']; }
+		if(!empty($linked['phone'])){ $contact_bits[] = 'phone '.$linked['phone']; }
+		$contact = empty($contact_bits) ? '' : (' It is linked to '.implode(' and ', $contact_bits).'.');
+
+		$nonce = substr(md5(uniqid((string)mt_rand(), true)), 0, 8);
+
+		$prompt  = "Write the 'additional details' message a real person would submit to ".$category." Support to appeal/report a problem with their own account.\n";
+		$prompt .= "Issue: \"".$issue."\".\n";
+		$prompt .= "Account handle: ".$account.".".$contact."\n\n";
+		$prompt .= "Write in first person as the account owner. Length: 3-4 sentences, about 45-75 words — long enough to be clear and credible to a support agent, short enough to read quickly. ";
+		$prompt .= "Tone: calm, polite, genuinely human — a real user who is concerned but respectful. Use everyday words and contractions; avoid robotic, salesy, or templated phrasing and avoid dramatic pleading. ";
+		$prompt .= "Briefly confirm the account is mine (reference the handle, and the linked contact as proof of ownership if provided), explain the \"".$issue."\" situation plainly, and politely ask the team to review and restore access. ";
+		$prompt .= "Do NOT invent facts, dates, or reasons that weren't provided. No greeting line, no sign-off, no placeholders like [name], no markdown, no quotes — output only the message text. ";
+		$prompt .= "Vary the wording so it reads as freshly written (id ".$nonce.").";
+
+		return $prompt;
+	}
+
+	/**
+	 * AJAX: save the CURRENT user's own AI key (type ai_assistant_user_{id}).
+	 * Available to any project-viewer (not clients) so members who can't reach
+	 * the admin Settings page can still configure their own key.
+	 */
+	public function save_ai_key()
+	{
+		if ($this->ion_auth->logged_in() && is_module_allowed('projects') && !$this->ion_auth->in_group(3) && ($this->ion_auth->is_admin() || permissions('project_view')))
+		{
+			$this->form_validation->set_rules('api_key', 'API key', 'trim|xss_clean');
+			$this->form_validation->set_rules('model', 'model', 'trim|xss_clean');
+
+			if($this->form_validation->run() == TRUE){
+				$api_key = trim($this->input->post('api_key'));
+				$data_json = array(
+					'enabled'  => $api_key !== '' ? '1' : '0',
+					'provider' => 'gemini',
+					'api_key'  => $api_key,
+					'model'    => trim($this->input->post('model')) ? trim($this->input->post('model')) : 'gemini-2.5-flash',
+				);
+				$type = 'ai_assistant_user_'.(int)$this->session->userdata('user_id');
+
+				if($this->settings_model->save_settings($type, array('value' => json_encode($data_json)))){
+					$this->data['error'] = false;
+					$this->data['message'] = $this->lang->line('updated_successfully') ? $this->lang->line('updated_successfully') : 'Updated successfully.';
+				}else{
+					$this->data['error'] = true;
+					$this->data['message'] = $this->lang->line('something_wrong_try_again') ? $this->lang->line('something_wrong_try_again') : 'Something wrong! Try again.';
+				}
+				echo json_encode($this->data);
+			}else{
+				$this->data['error'] = true;
+				$this->data['message'] = validation_errors();
+				echo json_encode($this->data);
+			}
+		}else{
+			$this->data['error'] = true;
+			$this->data['message'] = $this->lang->line('access_denied') ? $this->lang->line('access_denied') : 'Access Denied';
+			echo json_encode($this->data);
+		}
+	}
+
+	/**
+	 * AJAX: test the key/model typed into the Report Assistant setup box before
+	 * saving. Uses the posted key + model directly.
+	 */
+	public function test_ai_key()
+	{
+		if ($this->ion_auth->logged_in() && is_module_allowed('projects') && !$this->ion_auth->in_group(3) && ($this->ion_auth->is_admin() || permissions('project_view')))
+		{
+			$api_key = trim($this->input->post('api_key'));
+			$model   = trim($this->input->post('model'));
+
+			$result = ai_generate_text('Reply with exactly the word: OK', 0.2, $api_key, $model);
+
+			if(!$result['error']){
+				$this->data['error'] = false;
+				$this->data['message'] = $this->lang->line('ai_test_ok') ? $this->lang->line('ai_test_ok') : 'Connected. Your AI key works.';
+			}else{
+				$this->data['error'] = true;
+				$this->data['message'] = ($this->lang->line('ai_test_failed') ? $this->lang->line('ai_test_failed') : 'Could not connect: ').$result['message'];
+			}
+			echo json_encode($this->data);
+		}else{
+			$this->data['error'] = true;
+			$this->data['message'] = $this->lang->line('access_denied') ? $this->lang->line('access_denied') : 'Access Denied';
+			echo json_encode($this->data);
+		}
+	}
+
 	public function get_clients_projects()
 	{
 		if ($this->ion_auth->logged_in())

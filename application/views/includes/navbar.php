@@ -87,8 +87,12 @@
         <li <?=(current_url() == base_url('projects') || $this->uri->segment(2) == 'detail' || $this->uri->segment(2) == 'list')?'class="active"':''; ?>><a class="nav-link" href="<?=base_url('projects')?>"><i class="fas fa-layer-group text-danger"></i> <span><?=$this->lang->line('projects')?$this->lang->line('projects'):'Projects'?></span></a></li>
       <?php } ?>
 
-      <?php if(($this->ion_auth->is_admin() || permissions('task_view')) && !$this->ion_auth->in_group(3) && is_module_allowed('tasks')){ ?>  
+      <?php if(($this->ion_auth->is_admin() || permissions('task_view')) && !$this->ion_auth->in_group(3) && is_module_allowed('tasks')){ ?>
         <li <?=(current_url() == base_url('projects/tasks') || $this->uri->segment(2) == 'tasks' || $this->uri->segment(2) == 'tasks-list')?'class="active"':''; ?>><a class="nav-link" href="<?=base_url('projects/tasks')?>"><i class="fas fa-tasks text-success"></i> <span><?=$this->lang->line('tasks')?$this->lang->line('tasks'):'Tasks'?></span></a></li>
+      <?php } ?>
+
+      <?php if(($this->ion_auth->is_admin() || permissions('project_view')) && !$this->ion_auth->in_group(3) && is_module_allowed('projects')){ ?>
+        <li <?=($this->uri->segment(2) == 'report-assistant' || $this->uri->segment(2) == 'report_assistant')?'class="active"':''; ?>><a class="nav-link" href="<?=base_url('projects/report-assistant')?>"><i class="fas fa-robot text-primary"></i> <span><?=$this->lang->line('report_assistant')?$this->lang->line('report_assistant'):'Report Assistant'?></span></a></li>
       <?php } ?>
       
       

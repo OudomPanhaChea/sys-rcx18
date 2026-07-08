@@ -1592,6 +1592,228 @@ function project_issues($category_id = '', $issue_id = ''){
     }
 }
 
+/* =====================================================================
+ * REPORT ASSISTANT  (AI-generated TikTok report/appeal messages)
+ * ---------------------------------------------------------------------
+ * AI config is stored PER USER in the `settings` table under
+ * type='ai_assistant_user_{user_id}', JSON {enabled, provider, api_key, model}.
+ * Each user brings their own Gemini key so the free-tier quota is per-user
+ * instead of everyone sharing one admin key (which would run out mid-batch).
+ * There is no shared/admin key — users set their own on the Report Assistant page.
+ * ===================================================================== */
+
+function get_ai_settings($user_id = '')
+{
+    $CI =& get_instance();
+    if($user_id === '' || $user_id === null){
+        $user_id = $CI->session->userdata('user_id');
+    }
+    if(empty($user_id)){
+        return null;
+    }
+    $CI->db->from('settings');
+    $CI->db->where(['type' => 'ai_assistant_user_'.(int)$user_id]);
+    $data = $CI->db->get()->result_array();
+    if($data){
+        return json_decode($data[0]['value']);
+    }
+    return null;
+}
+
+/**
+ * Whether the given (or current) user has their OWN key stored — ignores the
+ * legacy shared fallback. Used to prompt users to set up their key.
+ */
+function user_has_own_ai_key($user_id = '')
+{
+    $CI =& get_instance();
+    if($user_id === '' || $user_id === null){
+        $user_id = $CI->session->userdata('user_id');
+    }
+    if(empty($user_id)){
+        return false;
+    }
+    $CI->db->from('settings');
+    $CI->db->where(['type' => 'ai_assistant_user_'.(int)$user_id]);
+    $data = $CI->db->get()->result_array();
+    if(!$data){
+        return false;
+    }
+    $s = json_decode($data[0]['value']);
+    return (!empty($s) && !empty($s->api_key));
+}
+
+function ai_enabled()
+{
+    $settings = get_ai_settings();
+    return (!empty($settings) && !empty($settings->enabled) && $settings->enabled == '1');
+}
+
+function ai_api_key()
+{
+    $settings = get_ai_settings();
+    return (!empty($settings) && !empty($settings->api_key)) ? trim($settings->api_key) : '';
+}
+
+function ai_model()
+{
+    $settings = get_ai_settings();
+    return (!empty($settings) && !empty($settings->model)) ? trim($settings->model) : 'gemini-2.5-flash';
+}
+
+/**
+ * Call Google Gemini's generateContent endpoint and return the generated
+ * plain text. Returns array('error'=>bool, 'text'=>string, 'message'=>string).
+ * Never throws — always returns the array shape so callers can render it.
+ *
+ * @param string $prompt       The full prompt to send.
+ * @param float  $temperature  Higher = more varied wording (0.0 - 2.0).
+ * @param string $api_key      Optional override (used by the tester before the
+ *                             key is saved). Falls back to the stored key.
+ * @param string $model        Optional model override. Falls back to the
+ *                             stored model (per-model quotas differ, so the
+ *                             tester passes the typed model).
+ */
+function ai_generate_text($prompt, $temperature = 1.1, $api_key = '', $model = '')
+{
+    $key   = !empty($api_key) ? trim($api_key) : ai_api_key();
+    $model = !empty($model) ? trim($model) : ai_model();
+
+    if(empty($key)){
+        return array('error' => true, 'text' => '', 'message' => 'AI API key is not configured. Set it up on the Report Assistant page.');
+    }
+    if(empty($prompt)){
+        return array('error' => true, 'text' => '', 'message' => 'Empty prompt.');
+    }
+    if(!function_exists('curl_init')){
+        return array('error' => true, 'text' => '', 'message' => 'cURL is not available on this server.');
+    }
+
+    $url = 'https://generativelanguage.googleapis.com/v1beta/models/'.rawurlencode($model).':generateContent?key='.$key;
+
+    $gen = array(
+        'temperature' => (float)$temperature,
+        // Enough headroom for a short message; length is controlled by the prompt.
+        'maxOutputTokens' => 512,
+    );
+
+    // Gemini 2.5 models "think" by default and that internal reasoning silently
+    // consumes the output-token budget — leaving a truncated (or empty) reply.
+    // Disable thinking for them so the whole budget goes to the visible answer.
+    if(stripos($model, '2.5') !== false){
+        $gen['thinkingConfig'] = array('thinkingBudget' => 0);
+    }
+
+    $payload = array(
+        'contents' => array(
+            array('parts' => array(array('text' => $prompt))),
+        ),
+        'generationConfig' => $gen,
+    );
+
+    $ch = curl_init($url);
+    curl_setopt($ch, CURLOPT_POST, true);
+    curl_setopt($ch, CURLOPT_HTTPHEADER, array('Content-Type: application/json'));
+    curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($payload));
+    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+    curl_setopt($ch, CURLOPT_TIMEOUT, 30);
+    curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 8);
+    // Shared hosts often lack an up-to-date CA bundle; this is an outbound
+    // call to Google's API only, so relaxing verification is acceptable.
+    curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+    curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, false);
+
+    $response  = curl_exec($ch);
+    $http_code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    $curl_err  = curl_error($ch);
+    curl_close($ch);
+
+    if($response === false){
+        return array('error' => true, 'text' => '', 'message' => 'Request failed: '.$curl_err);
+    }
+
+    $json = json_decode($response, true);
+
+    if($http_code != 200){
+        $msg = isset($json['error']['message']) ? $json['error']['message'] : ('HTTP '.$http_code);
+        return array('error' => true, 'text' => '', 'message' => $msg);
+    }
+
+    // Join every text part (some models split the answer across parts).
+    if(isset($json['candidates'][0]['content']['parts']) && is_array($json['candidates'][0]['content']['parts'])){
+        $text = '';
+        foreach($json['candidates'][0]['content']['parts'] as $part){
+            if(isset($part['text'])){ $text .= $part['text']; }
+        }
+        $text = trim($text);
+        if($text !== ''){
+            return array('error' => false, 'text' => $text, 'message' => 'OK');
+        }
+    }
+
+    // No usable text. MAX_TOKENS here usually means a thinking model ate the
+    // budget; other reasons are safety blocks or an empty candidate.
+    $reason = isset($json['candidates'][0]['finishReason']) ? $json['candidates'][0]['finishReason'] : 'no content returned';
+    if($reason === 'MAX_TOKENS'){
+        return array('error' => true, 'text' => '', 'message' => 'The AI ran out of output space before writing the message. Try the model "gemini-2.0-flash".');
+    }
+    return array('error' => true, 'text' => '', 'message' => 'The AI returned no text ('.$reason.').');
+}
+
+/**
+ * Pull the TikTok @handle out of a project title. Per the workflow, the
+ * title may contain arbitrary text — we only want the first token that
+ * starts with "@". Returns e.g. "@john.doe" or '' when none is present.
+ */
+function extract_tiktok_username($title)
+{
+    $title = (string)$title;
+    if(preg_match('/@([A-Za-z0-9._]{2,})/', $title, $m)){
+        return '@'.rtrim($m[1], '.');
+    }
+    return '';
+}
+
+/**
+ * Pull the linked account details out of a project description. Handles the
+ * common "Linked Email: x@y.com" / "Linked Phone: +123" labels as well as a
+ * raw email or phone number sitting anywhere in the text.
+ *
+ * Returns array('email'=>string, 'phone'=>string, 'display'=>string) where
+ * `display` is a human-readable one-liner for the UI / prompt.
+ */
+function extract_linked_account($description)
+{
+    $text = trim(strip_tags((string)$description));
+
+    $email = '';
+    $phone = '';
+
+    // Prefer an explicitly labelled "Linked Email" value, else any email.
+    if(preg_match('/linked\s*e-?mail\s*[:\-]?\s*([A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,})/i', $text, $m)){
+        $email = $m[1];
+    }elseif(preg_match('/[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}/', $text, $m)){
+        $email = $m[0];
+    }
+
+    // Prefer an explicitly labelled "Linked Phone" value, else any phone-like run of digits.
+    if(preg_match('/linked\s*(?:phone|mobile|number)\s*[:\-]?\s*(\+?\d[\d\s\-]{6,}\d)/i', $text, $m)){
+        $phone = trim($m[1]);
+    }elseif(preg_match('/(\+?\d[\d\s\-]{7,}\d)/', $text, $m)){
+        $phone = trim($m[1]);
+    }
+
+    $parts = array();
+    if($email !== ''){ $parts[] = 'Email: '.$email; }
+    if($phone !== ''){ $parts[] = 'Phone: '.$phone; }
+
+    return array(
+        'email'   => $email,
+        'phone'   => $phone,
+        'display' => implode('  •  ', $parts),
+    );
+}
+
 function get_razorpay_key_id($is_non_saas = false){
     $CI =& get_instance();
     $CI->db->select('value');
