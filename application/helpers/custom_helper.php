@@ -1536,12 +1536,37 @@ function project_categories($category_id = ''){
 
 function project_category_counts(){
     $CI =& get_instance();
-    $CI->db->select('category_id, COUNT(id) as total', false);
-    $CI->db->from('projects');
-    $CI->db->where('saas_id', $CI->session->userdata('saas_id'));
-    $CI->db->where('category_id IS NOT NULL', null, false);
-    $CI->db->group_by('category_id');
-    $rows = $CI->db->get()->result_array();
+    $saas_id = $CI->session->userdata('saas_id');
+
+    // Count only the projects the current user can actually see, so the chip
+    // numbers match the grid: admins get the whole tenant, clients get their
+    // own client projects, members get projects they are assigned to.
+    if($CI->ion_auth->is_admin()){
+        $CI->db->select('category_id, COUNT(id) as total', false);
+        $CI->db->from('projects');
+        $CI->db->where('saas_id', $saas_id);
+        $CI->db->where('category_id IS NOT NULL', null, false);
+        $CI->db->group_by('category_id');
+        $rows = $CI->db->get()->result_array();
+    }elseif($CI->ion_auth->in_group(4)){
+        $CI->db->select('category_id, COUNT(id) as total', false);
+        $CI->db->from('projects');
+        $CI->db->where('saas_id', $saas_id);
+        $CI->db->where('client_id', $CI->session->userdata('user_id'));
+        $CI->db->where('category_id IS NOT NULL', null, false);
+        $CI->db->group_by('category_id');
+        $rows = $CI->db->get()->result_array();
+    }else{
+        $CI->db->select('p.category_id AS category_id, COUNT(DISTINCT p.id) as total', false);
+        $CI->db->from('project_users pu');
+        $CI->db->join('projects p', 'pu.project_id=p.id', 'left');
+        $CI->db->where('p.saas_id', $saas_id);
+        $CI->db->where('pu.user_id', $CI->session->userdata('user_id'));
+        $CI->db->where('p.category_id IS NOT NULL', null, false);
+        $CI->db->group_by('p.category_id');
+        $rows = $CI->db->get()->result_array();
+    }
+
     $counts = array();
     foreach($rows as $r){ $counts[(int)$r['category_id']] = (int)$r['total']; }
     return $counts;

@@ -4323,9 +4323,15 @@ $(document).on('change', '.project-category-select', function () {
 	var preselect = $issue.attr('data-selected') || '';
 	var base_label = $issue.find('option[value=""]').first().text() || 'Select Issue';
 
+	// refresh the select2 widget after we swap out the underlying <option>s
+	var syncIssue = function () {
+		if ($issue.hasClass('select2') && $.fn.select2) { $issue.trigger('change.select2'); }
+	};
+
 	if (!catId) {
 		$issue.html('<option value="">' + base_label + '</option>');
 		$issue.attr('data-selected', '');
+		syncIssue();
 		return;
 	}
 
@@ -4344,6 +4350,7 @@ $(document).on('change', '.project-category-select', function () {
 			$issue.html(html);
 			if (preselect) { $issue.val(preselect); }
 			$issue.attr('data-selected', '');
+			syncIssue();
 		}
 	});
 });
@@ -4373,7 +4380,7 @@ function projectsRenderCategories(data) {
 					'<i class="fas fa-angle-right text-muted mr-2"></i>' +
 					'<span class="issue-title flex-fill">' + esc(it.title) + '</span>' +
 					'<button type="button" class="btn btn-sm btn-icon edit-issue-btn" data-id="' + it.id + '" data-title="' + esc(it.title) + '"><i class="fas fa-pen"></i></button>' +
-					'<button type="button" class="btn btn-sm btn-icon text-danger delete-issue-btn" data-id="' + it.id + '"><i class="fas fa-trash"></i></button>' +
+					'<button type="button" class="btn btn-sm ml-2 btn-icon text-danger delete-issue-btn" data-id="' + it.id + '"><i class="fas fa-trash"></i></button>' +
 					'</div>';
 			});
 		}
@@ -4383,7 +4390,7 @@ function projectsRenderCategories(data) {
 			'<span class="badge badge-' + esc(cat.class) + ' mr-2">&#9679;</span>' +
 			'<span class="category-title flex-fill font-weight-bold">' + esc(cat.title) + '</span>' +
 			'<button type="button" class="btn btn-sm btn-icon edit-category-btn" data-id="' + cat.id + '" data-title="' + esc(cat.title) + '" data-class="' + esc(cat.class) + '"><i class="fas fa-pen"></i></button>' +
-			'<button type="button" class="btn btn-sm btn-icon text-danger delete-category-btn" data-id="' + cat.id + '"><i class="fas fa-trash"></i></button>' +
+			'<button type="button" class="btn btn-sm ml-2 btn-icon text-danger delete-category-btn" data-id="' + cat.id + '"><i class="fas fa-trash"></i></button>' +
 			'</div>' +
 			'<div class="issues-wrap mt-2 pl-4">' + issues +
 			'<div class="d-flex mt-1">' +
@@ -4435,21 +4442,63 @@ $(document).on('click', '.add-category-btn', function () {
 });
 $(document).on('keypress', '#new_category_title', function (e) { if (e.which === 13) { e.preventDefault(); $('.add-category-btn').click(); } });
 
-// edit category (rename / recolour)
+// colour choices, kept in sync with the "Add Category" dropdown in the view
+function projectsCategoryColorOptions(selected) {
+	var colors = [
+		['primary', 'Blue'], ['info', 'Cyan'], ['success', 'Green'],
+		['warning', 'Yellow'], ['danger', 'Red'], ['secondary', 'Grey']
+	];
+	var html = '';
+	$.each(colors, function (i, c) {
+		html += '<option value="' + c[0] + '"' + (c[0] === selected ? ' selected' : '') + '>' + c[1] + '</option>';
+	});
+	return html;
+}
+
+// edit category (rename / recolour) — inline editor, mirrors the add-category row
 $(document).on('click', '.edit-category-btn', function () {
+	var $card = $(this).closest('.category-card');
+	if ($card.find('.category-edit-row').length) { return; } // already editing
 	var id = $(this).data('id');
 	var current = $(this).data('title');
-	var cls = $(this).data('class');
-	var title = window.prompt('Category name:', current);
-	if (title === null) { return; }
-	title = $.trim(title);
-	if (!title) { return; }
+	var cls = $(this).data('class') || 'primary';
+	var esc = $('<div>').text(current == null ? '' : current).html();
+	// same grid + full-size controls as the "Add Category" row
+	var editor = '<div class="row category-edit-row">' +
+		'<div class="col-7 pr-1">' +
+		'<input type="text" class="form-control edit-category-title" value="' + esc + '">' +
+		'</div>' +
+		'<div class="col-3 px-1">' +
+		'<select class="form-control edit-category-class">' + projectsCategoryColorOptions(cls) + '</select>' +
+		'</div>' +
+		'<div class="col-2 pl-1 d-flex">' +
+		'<button type="button" class="btn btn-primary flex-fill mr-1 save-category-btn" data-id="' + id + '"><i class="fas fa-check"></i></button>' +
+		'<button type="button" class="btn btn-icon cancel-category-btn"><i class="fas fa-times"></i></button>' +
+		'</div>' +
+		'</div>';
+	$card.find('.d-flex.align-items-center').first().replaceWith(editor);
+	$card.find('.edit-category-title').focus();
+});
+
+// save inline category edit
+$(document).on('click', '.save-category-btn', function () {
+	var $card = $(this).closest('.category-card');
+	var id = $(this).data('id');
+	var title = $.trim($card.find('.edit-category-title').val());
+	var cls = $card.find('.edit-category-class').val();
+	if (!title) { $card.find('.edit-category-title').focus(); return; }
 	$.ajax({
 		type: 'POST', url: base_url + 'projects/edit_category', dataType: 'json',
 		data: { update_id: id, title: title, class: cls },
 		success: function (res) { projectsToast(res); if (res['error'] === false) { projectsLoadCategories(); } }
 	});
 });
+$(document).on('keypress', '.edit-category-title', function (e) {
+	if (e.which === 13) { e.preventDefault(); $(this).closest('.category-card').find('.save-category-btn').click(); }
+});
+
+// cancel inline category edit — just re-render the list
+$(document).on('click', '.cancel-category-btn', function () { projectsLoadCategories(); });
 
 // delete category
 $(document).on('click', '.delete-category-btn', function () {
@@ -4477,19 +4526,43 @@ $(document).on('keypress', '.new-issue-input', function (e) {
 	if (e.which === 13) { e.preventDefault(); $('.add-issue-btn[data-category="' + $(this).data('category') + '"]').click(); }
 });
 
-// edit issue
+// edit issue — inline editor, mirrors the category inline edit
 $(document).on('click', '.edit-issue-btn', function () {
+	var $row = $(this).closest('.issue-row');
+	if ($row.hasClass('issue-edit-row')) { return; } // already editing
 	var id = $(this).data('id');
-	var title = window.prompt('Issue name:', $(this).data('title'));
-	if (title === null) { return; }
-	title = $.trim(title);
-	if (!title) { return; }
+	var current = $(this).data('title');
+	var esc = $('<div>').text(current == null ? '' : current).html();
+	// same grid + full-size controls as the "Add Category" row (issues have no colour)
+	var editor = '<div class="col-10 pr-1">' +
+		'<input type="text" class="form-control edit-issue-title" value="' + esc + '">' +
+		'</div>' +
+		'<div class="col-2 pl-1 d-flex">' +
+		'<button type="button" class="btn btn-primary flex-fill mr-1 save-issue-btn" data-id="' + id + '"><i class="fas fa-check"></i></button>' +
+		'<button type="button" class="btn btn-icon cancel-issue-btn"><i class="fas fa-times"></i></button>' +
+		'</div>';
+	$row.removeClass('d-flex align-items-center py-1').addClass('row issue-edit-row').html(editor);
+	$row.find('.edit-issue-title').focus();
+});
+
+// save inline issue edit
+$(document).on('click', '.save-issue-btn', function () {
+	var $row = $(this).closest('.issue-row');
+	var id = $(this).data('id');
+	var title = $.trim($row.find('.edit-issue-title').val());
+	if (!title) { $row.find('.edit-issue-title').focus(); return; }
 	$.ajax({
 		type: 'POST', url: base_url + 'projects/edit_issue', dataType: 'json',
 		data: { update_id: id, title: title },
 		success: function (res) { projectsToast(res); if (res['error'] === false) { projectsLoadCategories(); } }
 	});
 });
+$(document).on('keypress', '.edit-issue-title', function (e) {
+	if (e.which === 13) { e.preventDefault(); $(this).closest('.issue-row').find('.save-issue-btn').click(); }
+});
+
+// cancel inline issue edit — just re-render the list
+$(document).on('click', '.cancel-issue-btn', function () { projectsLoadCategories(); });
 
 // delete issue
 $(document).on('click', '.delete-issue-btn', function () {

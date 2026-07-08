@@ -1439,13 +1439,38 @@ class Projects extends CI_Controller
 			$this->data['project_status'] = project_status();
 			$this->data['project_categories'] = project_categories();
 			$this->data['project_category_counts'] = project_category_counts();
-			$this->data['project_issues'] = project_issues();
+
+			if(isset($_GET['status']) && !empty($_GET['status']) && is_numeric($_GET['status'])){
+				$filter = $_GET['status'];
+				$filter_type = 'status';
+			}elseif(isset($_GET['user']) && !empty($_GET['user']) && is_numeric($_GET['user'])){
+				$filter = $_GET['user'];
+				$filter_type = 'user';
+			}elseif(isset($_GET['client']) && !empty($_GET['client']) && is_numeric($_GET['client'])){
+				$filter = $_GET['client'];
+				$filter_type = 'client';
+			}else{
+				$filter = (isset($_GET['sortby']) && !empty($_GET['sortby']) && ($_GET['sortby'] == 'latest' || $_GET['sortby'] == 'old' || $_GET['sortby'] == 'name'))?$_GET['sortby']:'latest';
+				$filter_type = 'sortby';
+			}
+
+			$category_filter = (isset($_GET['category']) && !empty($_GET['category']) && is_numeric($_GET['category']))?$_GET['category']:'';
+			$issue_filter = (isset($_GET['issue']) && !empty($_GET['issue']) && is_numeric($_GET['issue']))?$_GET['issue']:'';
+
+			// The issue filter dropdown lists every issue when no category is
+			// selected, but narrows to the active category's issues once one is.
+			$this->data['project_issues'] = project_issues($category_filter);
+
+			$count_user_id = $this->ion_auth->is_admin() ? '' : $this->session->userdata('user_id');
 
 			$config = array();
 			$config["base_url"] = base_url('projects');
-			$config["total_rows"] = get_count('id','projects','');
+			$config["total_rows"] = $this->projects_model->count_projects($count_user_id, $filter_type, $filter, $category_filter, $issue_filter);
 			$config["per_page"] = 10;
 			$config["uri_segment"] = 2;
+			// Keep the active filters (?category, ?status, ...) on every page link
+			// so paging does not reset the grid back to "all".
+			$config["reuse_query_string"] = TRUE;
 			    
             $config['next_link']        = 'Next';
             $config['prev_link']        = 'Previous';
@@ -1481,23 +1506,6 @@ class Projects extends CI_Controller
 
 			$page = ($this->uri->segment(2) && is_numeric($this->uri->segment(2)))?$this->uri->segment(2):0;
 			$this->data["links"] = $this->pagination->create_links();
-
-			if(isset($_GET['status']) && !empty($_GET['status']) && is_numeric($_GET['status'])){
-				$filter = $_GET['status'];
-				$filter_type = 'status';
-			}elseif(isset($_GET['user']) && !empty($_GET['user']) && is_numeric($_GET['user'])){
-				$filter = $_GET['user'];
-				$filter_type = 'user';
-			}elseif(isset($_GET['client']) && !empty($_GET['client']) && is_numeric($_GET['client'])){
-				$filter = $_GET['client'];
-				$filter_type = 'client';
-			}else{
-				$filter = (isset($_GET['sortby']) && !empty($_GET['sortby']) && ($_GET['sortby'] == 'latest' || $_GET['sortby'] == 'old' || $_GET['sortby'] == 'name'))?$_GET['sortby']:'latest';
-				$filter_type = 'sortby';
-			}
-			
-			$category_filter = (isset($_GET['category']) && !empty($_GET['category']) && is_numeric($_GET['category']))?$_GET['category']:'';
-			$issue_filter = (isset($_GET['issue']) && !empty($_GET['issue']) && is_numeric($_GET['issue']))?$_GET['issue']:'';
 
 			if($this->ion_auth->is_admin()){
 				$this->data['projects'] = $this->projects_model->get_projects('','',$config["per_page"], $page, $filter_type, $filter, $category_filter, $issue_filter);

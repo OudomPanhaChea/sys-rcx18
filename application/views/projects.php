@@ -45,9 +45,12 @@
           </div>
           <div class="section-body">
             <?php
-            // Preserve current filters when switching category via the stat chips
+            // Preserve current filters when switching category via the stat chips.
+            // Drop the previously selected issue too, since it may belong to a
+            // different category than the one being switched to.
             $cat_query = $_GET;
             unset($cat_query['category']);
+            unset($cat_query['issue']);
             $cat_base = base_url('projects') . (empty($cat_query) ? '' : '?' . http_build_query($cat_query));
             $cat_prefix = base_url('projects') . '?' . http_build_query($cat_query);
             $cat_prefix .= empty($cat_query) ? 'category=' : '&category=';
@@ -423,7 +426,7 @@
       </div>
       <div class="form-group col-md-6">
         <label><?= $this->lang->line('issue') ? $this->lang->line('issue') : 'Issue' ?></label>
-        <select name="issue" class="form-control project-issue-select-add">
+        <select name="issue" class="form-control select2 project-issue-select-add">
           <option value=""><?= $this->lang->line('select_issue') ? $this->lang->line('select_issue') : 'Select Issue' ?>
           </option>
         </select>
@@ -529,7 +532,7 @@
       </div>
       <div class="form-group col-md-6">
         <label><?= $this->lang->line('issue') ? $this->lang->line('issue') : 'Issue' ?></label>
-        <select name="issue" id="issue_edit" class="form-control project-issue-select-edit">
+        <select name="issue" id="issue_edit" class="form-control select2 project-issue-select-edit">
           <option value=""><?= $this->lang->line('select_issue') ? $this->lang->line('select_issue') : 'Select Issue' ?>
           </option>
         </select>

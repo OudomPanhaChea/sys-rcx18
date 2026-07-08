@@ -744,6 +744,44 @@ class Projects_model extends CI_Model
         print_r(json_encode($bulkData));
     }
     
+    // Counts the projects visible to a user under the current filters. Mirrors
+    // the WHERE logic of get_projects() so pagination totals stay in sync with
+    // the grid (admins see the whole tenant, members only their own projects).
+    function count_projects($user_id = '', $filter_type='', $filter='', $category='', $issue=''){
+
+        $where = "";
+
+        if(!empty($filter_type) && !empty($filter) && is_numeric($filter) && $filter_type == 'status'){
+            $where = "WHERE ps.id = $filter";
+        }elseif(!empty($filter_type) && !empty($filter) && is_numeric($filter) && $filter_type == 'user'){
+            $where = "WHERE pu.user_id = $filter";
+        }elseif(!empty($filter_type) && !empty($filter) && is_numeric($filter) && $filter_type == 'client'){
+            $where = "WHERE p.client_id = $filter";
+        }
+
+        if(!empty($user_id) && is_numeric($user_id)){
+            if($this->ion_auth->in_group(4)){
+                $where .= (empty($where))?" WHERE p.client_id=$user_id ":" AND p.client_id=$user_id ";
+            }else{
+                $where .= (empty($where))?" WHERE pu.user_id=$user_id ":"";
+            }
+        }
+        $where .= empty($where)?" WHERE p.saas_id=".$this->session->userdata('saas_id'):" AND p.saas_id=".$this->session->userdata('saas_id');
+
+        if(!empty($category) && is_numeric($category)){
+            $where .= " AND p.category_id = $category ";
+        }
+        if(!empty($issue) && is_numeric($issue)){
+            $where .= " AND p.issue_id = $issue ";
+        }
+
+        $left_join = " LEFT JOIN projects p ON pu.project_id=p.id ";
+        $left_join .= " LEFT JOIN project_status ps ON p.status=ps.id ";
+        $query = $this->db->query("SELECT COUNT(DISTINCT pu.project_id) AS total FROM project_users pu $left_join $where");
+        $res = $query->result_array();
+        return !empty($res) ? (int)$res[0]['total'] : 0;
+    }
+
     function get_projects($user_id = '',$project_id = '',$limit='', $start='', $filter_type='', $filter='', $category='', $issue=''){
 
         if(!empty($limit)){
