@@ -153,15 +153,9 @@ $(document).on('click','.user-selected-for-chat',function(e){
 
           if(result['error'] == false){
             $("#to_id").val(result['data'].id);
-            if(result['data'].profile && result['data'].profile != ''){
-              var file_upload_path = '';
-              if(doesFileExist(base_url+'assets/uploads/profiles/'+result['data'].profile)){
-                file_upload_path = base_url+'assets/uploads/profiles/'+result['data'].profile;
-              }else{
-                file_upload_path = base_url+'assets/uploads/f'+saas_id+'/profiles/'+result['data'].profile;
-              }
+            if(result['data'].profile_url && result['data'].profile_url != ''){
               var profile = '<figure class="avatar avatar-sm">'+
-              '<img src="'+file_upload_path+'" alt="'+result['data'].first_name+' '+result['data'].last_name+'">'+
+              '<img src="'+result['data'].profile_url+'" alt="'+result['data'].first_name+' '+result['data'].last_name+'">'+
               '</figure><div class="media-body">'+
               '<div class="ml-2 font-weight-bold">'+result['data'].first_name+' '+result['data'].last_name+'</div>'+
               '</div>';

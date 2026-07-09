@@ -78,9 +78,28 @@ function maintenance_mode($is_non_saas = false){
     }
 }
 
+function profile_pic_url($profile = ''){
+    static $cache = array();
+    if(empty($profile)){
+        return '';
+    }
+    if(array_key_exists($profile, $cache)){
+        return $cache[$profile];
+    }
+    $CI =& get_instance();
+    $url = '';
+    if(file_exists(FCPATH.'assets/uploads/profiles/'.$profile)){
+        $url = base_url('assets/uploads/profiles/'.$profile);
+    }elseif(file_exists(FCPATH.'assets/uploads/f'.$CI->session->userdata('saas_id').'/profiles/'.$profile)){
+        $url = base_url('assets/uploads/f'.$CI->session->userdata('saas_id').'/profiles/'.$profile);
+    }
+    $cache[$profile] = $url;
+    return $url;
+}
+
 function get_notifications_live()
 {
-    
+
     $CI =& get_instance();
 
     $new_noti = true;
@@ -1134,6 +1153,7 @@ function get_notifications($user_id = ''){
             $temp[$key]['first_name'] = $notification['first_name'];
             $temp[$key]['last_name'] = $notification['last_name'];
             $temp[$key]['profile'] = $notification['profile'];
+            $temp[$key]['profile_url'] = profile_pic_url($notification['profile']);
 
         }
     }else{
@@ -1458,8 +1478,10 @@ function project_status($field = '', $status_id = ''){
             $tmp[$key]['title'] = $CI->lang->line('not_started')?$CI->lang->line('not_started'):'Not Started';
             }elseif($project_title['title'] == 'On Going'){
             $tmp[$key]['title'] = $CI->lang->line('on_going')?$CI->lang->line('on_going'):'On Going';
-            }elseif($project_title['title'] == 'Finished'){
-            $tmp[$key]['title'] = $CI->lang->line('finished')?$CI->lang->line('finished'):'Finished';
+            }elseif($project_title['title'] == 'Done'){
+            $tmp[$key]['title'] = $CI->lang->line('done')?$CI->lang->line('done'):'Done';
+            }elseif($project_title['title'] == 'Failed'){
+            $tmp[$key]['title'] = $CI->lang->line('failed')?$CI->lang->line('failed'):'Failed';
             }
         }
         return $tmp;
@@ -1593,13 +1615,19 @@ function project_issues($category_id = '', $issue_id = ''){
 }
 
 /* =====================================================================
- * REPORT ASSISTANT  (AI-generated TikTok report/appeal messages)
+ * REPORT ASSISTANT  (AI-generated report/appeal messages)
  * ---------------------------------------------------------------------
  * AI config is stored PER USER in the `settings` table under
- * type='ai_assistant_user_{user_id}', JSON {enabled, provider, api_key, model}.
- * Each user brings their own Gemini key so the free-tier quota is per-user
+ * type='ai_assistant_user_{user_id}', JSON:
+ *   {enabled, provider, api_key, model, groq_api_key, groq_model, auto_fallback}
+ * `provider` is the primary ('gemini'|'groq'); `api_key`/`model` are the
+ * Gemini credentials (legacy field names kept for existing rows);
+ * `groq_api_key`/`groq_model` are the Groq credentials; `auto_fallback`='1'
+ * retries the other provider when the primary fails.
+ * Each user brings their own keys so the free-tier quota is per-user
  * instead of everyone sharing one admin key (which would run out mid-batch).
  * There is no shared/admin key — users set their own on the Report Assistant page.
+ * Generation goes through the Ai_client library (application/libraries/ai/).
  * ===================================================================== */
 
 function get_ai_settings($user_id = '')
@@ -1640,124 +1668,48 @@ function user_has_own_ai_key($user_id = '')
         return false;
     }
     $s = json_decode($data[0]['value']);
-    return (!empty($s) && !empty($s->api_key));
-}
-
-function ai_enabled()
-{
-    $settings = get_ai_settings();
-    return (!empty($settings) && !empty($settings->enabled) && $settings->enabled == '1');
-}
-
-function ai_api_key()
-{
-    $settings = get_ai_settings();
-    return (!empty($settings) && !empty($settings->api_key)) ? trim($settings->api_key) : '';
-}
-
-function ai_model()
-{
-    $settings = get_ai_settings();
-    return (!empty($settings) && !empty($settings->model)) ? trim($settings->model) : 'gemini-2.5-flash';
+    return (!empty($s) && (!empty($s->api_key) || !empty($s->groq_api_key)));
 }
 
 /**
- * Call Google Gemini's generateContent endpoint and return the generated
- * plain text. Returns array('error'=>bool, 'text'=>string, 'message'=>string).
- * Never throws — always returns the array shape so callers can render it.
+ * The current (or given) user's AI settings normalized to one shape with
+ * defaults filled in, regardless of which fields the stored JSON row has:
  *
- * @param string $prompt       The full prompt to send.
- * @param float  $temperature  Higher = more varied wording (0.0 - 2.0).
- * @param string $api_key      Optional override (used by the tester before the
- *                             key is saved). Falls back to the stored key.
- * @param string $model        Optional model override. Falls back to the
- *                             stored model (per-model quotas differ, so the
- *                             tester passes the typed model).
+ *   array(
+ *     'provider'      => 'gemini'|'groq',   // primary provider
+ *     'auto_fallback' => bool,              // retry the other provider on failure
+ *     'gemini'        => array('api_key' => string, 'model' => string),
+ *     'groq'          => array('api_key' => string, 'model' => string),
+ *   )
  */
-function ai_generate_text($prompt, $temperature = 1.1, $api_key = '', $model = '')
+function ai_settings($user_id = '')
 {
-    $key   = !empty($api_key) ? trim($api_key) : ai_api_key();
-    $model = !empty($model) ? trim($model) : ai_model();
+    $s = get_ai_settings($user_id);
 
-    if(empty($key)){
-        return array('error' => true, 'text' => '', 'message' => 'AI API key is not configured. Set it up on the Report Assistant page.');
-    }
-    if(empty($prompt)){
-        return array('error' => true, 'text' => '', 'message' => 'Empty prompt.');
-    }
-    if(!function_exists('curl_init')){
-        return array('error' => true, 'text' => '', 'message' => 'cURL is not available on this server.');
+    $provider = (!empty($s) && !empty($s->provider)) ? trim($s->provider) : 'gemini';
+    if($provider !== 'gemini' && $provider !== 'groq'){
+        $provider = 'gemini';
     }
 
-    $url = 'https://generativelanguage.googleapis.com/v1beta/models/'.rawurlencode($model).':generateContent?key='.$key;
-
-    $gen = array(
-        'temperature' => (float)$temperature,
-        // Enough headroom for a short message; length is controlled by the prompt.
-        'maxOutputTokens' => 512,
-    );
-
-    // Gemini 2.5 models "think" by default and that internal reasoning silently
-    // consumes the output-token budget — leaving a truncated (or empty) reply.
-    // Disable thinking for them so the whole budget goes to the visible answer.
-    if(stripos($model, '2.5') !== false){
-        $gen['thinkingConfig'] = array('thinkingBudget' => 0);
-    }
-
-    $payload = array(
-        'contents' => array(
-            array('parts' => array(array('text' => $prompt))),
+    return array(
+        'provider'      => $provider,
+        'auto_fallback' => (!empty($s) && !empty($s->auto_fallback) && $s->auto_fallback == '1'),
+        'gemini' => array(
+            'api_key' => (!empty($s) && !empty($s->api_key)) ? trim($s->api_key) : '',
+            'model'   => (!empty($s) && !empty($s->model)) ? trim($s->model) : 'gemini-2.5-flash',
         ),
-        'generationConfig' => $gen,
+        'groq' => array(
+            'api_key' => (!empty($s) && !empty($s->groq_api_key)) ? trim($s->groq_api_key) : '',
+            'model'   => (!empty($s) && !empty($s->groq_model)) ? trim($s->groq_model) : 'llama-3.3-70b-versatile',
+        ),
     );
+}
 
-    $ch = curl_init($url);
-    curl_setopt($ch, CURLOPT_POST, true);
-    curl_setopt($ch, CURLOPT_HTTPHEADER, array('Content-Type: application/json'));
-    curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($payload));
-    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-    curl_setopt($ch, CURLOPT_TIMEOUT, 30);
-    curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 8);
-    // Shared hosts often lack an up-to-date CA bundle; this is an outbound
-    // call to Google's API only, so relaxing verification is acceptable.
-    curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
-    curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, false);
-
-    $response  = curl_exec($ch);
-    $http_code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-    $curl_err  = curl_error($ch);
-    curl_close($ch);
-
-    if($response === false){
-        return array('error' => true, 'text' => '', 'message' => 'Request failed: '.$curl_err);
-    }
-
-    $json = json_decode($response, true);
-
-    if($http_code != 200){
-        $msg = isset($json['error']['message']) ? $json['error']['message'] : ('HTTP '.$http_code);
-        return array('error' => true, 'text' => '', 'message' => $msg);
-    }
-
-    // Join every text part (some models split the answer across parts).
-    if(isset($json['candidates'][0]['content']['parts']) && is_array($json['candidates'][0]['content']['parts'])){
-        $text = '';
-        foreach($json['candidates'][0]['content']['parts'] as $part){
-            if(isset($part['text'])){ $text .= $part['text']; }
-        }
-        $text = trim($text);
-        if($text !== ''){
-            return array('error' => false, 'text' => $text, 'message' => 'OK');
-        }
-    }
-
-    // No usable text. MAX_TOKENS here usually means a thinking model ate the
-    // budget; other reasons are safety blocks or an empty candidate.
-    $reason = isset($json['candidates'][0]['finishReason']) ? $json['candidates'][0]['finishReason'] : 'no content returned';
-    if($reason === 'MAX_TOKENS'){
-        return array('error' => true, 'text' => '', 'message' => 'The AI ran out of output space before writing the message. Try the model "gemini-2.0-flash".');
-    }
-    return array('error' => true, 'text' => '', 'message' => 'The AI returned no text ('.$reason.').');
+/** Whether the current user can generate: their primary provider has a key. */
+function ai_ready()
+{
+    $settings = ai_settings();
+    return $settings[$settings['provider']]['api_key'] !== '';
 }
 
 /**

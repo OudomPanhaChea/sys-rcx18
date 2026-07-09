@@ -172,10 +172,13 @@ class Projects_model extends CI_Model
     }
 
 
-    function get_comments($type = '',$from_id = '',$to_id = ''){
+    function get_comments($type = '',$from_id = '',$to_id = '',$since_id = ''){
 
         $where = " WHERE m.type = '$type' AND m.to_id = $to_id ";
-        $order = " ORDER BY m.created DESC ";
+        if(!empty($since_id) && is_numeric($since_id)){
+            $where .= " AND m.id > $since_id ";
+        }
+        $order = " ORDER BY m.id DESC ";
 
         $left_join = " LEFT JOIN users u ON m.from_id=u.id ";
 
@@ -196,6 +199,7 @@ class Projects_model extends CI_Model
             }
             $temp[$key]['created'] = format_date($comment['created'],system_date_format());
             $temp[$key]['profile'] = $comment['profile'];
+            $temp[$key]['profile_url'] = profile_pic_url($comment['profile']);
             $temp[$key]['short_name'] = ucfirst(mb_substr($comment['first_name'], 0, 1, 'utf-8')).''.ucfirst(mb_substr($comment['last_name'], 0, 1, 'utf-8'));
         }
         $comments = $temp;
@@ -541,6 +545,9 @@ class Projects_model extends CI_Model
         $query = $this->db->query("SELECT u.id,u.email,u.first_name,u.last_name,u.profile FROM task_users pu $left_join $where");
         $data = $query->result_array();
         if($data){
+            foreach($data as $key => $task_user){
+                $data[$key]['profile_url'] = profile_pic_url($task_user['profile']);
+            }
             return $data;
         }else{
             return false;
@@ -658,9 +665,13 @@ class Projects_model extends CI_Model
                     $tempRow['project_status'] = '<span class="mb-1 badge badge-'.htmlspecialchars($result['project_class']).'">
 						'.($this->lang->line('on_going')?$this->lang->line('on_going'):'On Going').'
 						</span>';
-                }elseif($tempRow['project_status'] == 'Finished'){
+                }elseif($tempRow['project_status'] == 'Done'){
                     $tempRow['project_status'] = '<span class="mb-1 badge badge-'.htmlspecialchars($result['project_class']).'">
-						'.($this->lang->line('finished')?$this->lang->line('finished'):'Finished').'
+						'.($this->lang->line('done')?$this->lang->line('done'):'Done').'
+						</span>';
+                }elseif($tempRow['project_status'] == 'Failed'){
+                    $tempRow['project_status'] = '<span class="mb-1 badge badge-'.htmlspecialchars($result['project_class']).'">
+						'.($this->lang->line('failed')?$this->lang->line('failed'):'Failed').'
 						</span>';
                 }
                 $tempRow['starting_date'] = format_date($result['starting_date'],system_date_format());
@@ -747,7 +758,10 @@ class Projects_model extends CI_Model
     // Counts the projects visible to a user under the current filters. Mirrors
     // the WHERE logic of get_projects() so pagination totals stay in sync with
     // the grid (admins see the whole tenant, members only their own projects).
-    function count_projects($user_id = '', $filter_type='', $filter='', $category='', $issue=''){
+    // $status_scope: '' = all statuses, 'active' = Not Started + On Going only
+    // (the projects grid defaults to 'active'; Done/Failed are reached via the
+    // status tabs which pass an explicit ?status= id through $filter instead).
+    function count_projects($user_id = '', $filter_type='', $filter='', $category='', $issue='', $status_scope=''){
 
         $where = "";
 
@@ -763,7 +777,9 @@ class Projects_model extends CI_Model
             if($this->ion_auth->in_group(4)){
                 $where .= (empty($where))?" WHERE p.client_id=$user_id ":" AND p.client_id=$user_id ";
             }else{
-                $where .= (empty($where))?" WHERE pu.user_id=$user_id ":"";
+                // Always scope members to their own project assignments, even
+                // when a status/user/client filter already opened the WHERE.
+                $where .= (empty($where))?" WHERE pu.user_id=$user_id ":" AND pu.user_id=$user_id ";
             }
         }
         $where .= empty($where)?" WHERE p.saas_id=".$this->session->userdata('saas_id'):" AND p.saas_id=".$this->session->userdata('saas_id');
@@ -774,6 +790,9 @@ class Projects_model extends CI_Model
         if(!empty($issue) && is_numeric($issue)){
             $where .= " AND p.issue_id = $issue ";
         }
+        if($status_scope === 'active'){
+            $where .= " AND p.status IN (1,2) ";
+        }
 
         $left_join = " LEFT JOIN projects p ON pu.project_id=p.id ";
         $left_join .= " LEFT JOIN project_status ps ON p.status=ps.id ";
@@ -782,7 +801,8 @@ class Projects_model extends CI_Model
         return !empty($res) ? (int)$res[0]['total'] : 0;
     }
 
-    function get_projects($user_id = '',$project_id = '',$limit='', $start='', $filter_type='', $filter='', $category='', $issue=''){
+    // $status_scope works like in count_projects(): '' = all, 'active' = ids 1,2.
+    function get_projects($user_id = '',$project_id = '',$limit='', $start='', $filter_type='', $filter='', $category='', $issue='', $status_scope=''){
 
         if(!empty($limit)){
             $where_limit = ' LIMIT '.$limit;
@@ -819,7 +839,9 @@ class Projects_model extends CI_Model
             if($this->ion_auth->in_group(4)){
                 $where .= (empty($where))?" WHERE p.client_id=$user_id ":" AND p.client_id=$user_id ";
             }else{
-                $where .= (empty($where))?" WHERE pu.user_id=$user_id ":"";
+                // Always scope members to their own project assignments, even
+                // when a status/user/client filter already opened the WHERE.
+                $where .= (empty($where))?" WHERE pu.user_id=$user_id ":" AND pu.user_id=$user_id ";
             }
         }
         $where .= empty($where)?" WHERE p.saas_id=".$this->session->userdata('saas_id'):" AND p.saas_id=".$this->session->userdata('saas_id');
@@ -829,6 +851,9 @@ class Projects_model extends CI_Model
         }
         if(!empty($issue) && is_numeric($issue)){
             $where .= " AND p.issue_id = $issue ";
+        }
+        if($status_scope === 'active'){
+            $where .= " AND p.status IN (1,2) ";
         }
 
         $left_join = " LEFT JOIN projects p ON pu.project_id=p.id ";
@@ -848,8 +873,10 @@ class Projects_model extends CI_Model
                 $temp[$key]['project_status'] = $this->lang->line('not_started')?$this->lang->line('not_started'):'Not Started';
             }elseif($temp[$key]['project_status'] == 'On Going'){
                 $temp[$key]['project_status'] = $this->lang->line('on_going')?$this->lang->line('on_going'):'On Going';
-            }elseif($temp[$key]['project_status'] == 'Finished'){
-                $temp[$key]['project_status'] = $this->lang->line('finished')?$this->lang->line('finished'):'Finished';
+            }elseif($temp[$key]['project_status'] == 'Done'){
+                $temp[$key]['project_status'] = $this->lang->line('done')?$this->lang->line('done'):'Done';
+            }elseif($temp[$key]['project_status'] == 'Failed'){
+                $temp[$key]['project_status'] = $this->lang->line('failed')?$this->lang->line('failed'):'Failed';
             }
             $temp[$key]['starting_date'] = format_date($project['starting_date'],system_date_format());
             $temp[$key]['ending_date'] = format_date($project['ending_date'],system_date_format());

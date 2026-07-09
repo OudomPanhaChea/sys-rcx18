@@ -1332,16 +1332,18 @@ $("#modal-add-products").fireModal({
 	]
 });
 
+var file_exist_cache = {};
 function doesFileExist(urlToFile) {
+    if (urlToFile in file_exist_cache) {
+        return file_exist_cache[urlToFile];
+    }
     var xhr = new XMLHttpRequest();
     xhr.open('HEAD', urlToFile, false);
     xhr.send();
-     
-    if (xhr.status == "404") {
-        return false;
-    } else {
-        return true;
-    }
+
+    var exists = xhr.status >= 200 && xhr.status < 400;
+    file_exist_cache[urlToFile] = exists;
+    return exists;
 }
 
 $(document).on('click','.delete_expenses',function(e){
@@ -3758,6 +3760,106 @@ $("#modal-add-user").fireModal({
   ]
 });
 
+function commentItemHtml(val){
+	var profile = '';
+	if(val.profile_url){
+		profile = '<figure class="avatar avatar-md mr-3">'+
+			'<img src="'+val.profile_url+'" alt="'+val.first_name+' '+val.last_name+'">'+
+		'</figure>';
+	}else{
+		profile = '<figure class="avatar avatar-md bg-primary text-white mr-3" data-initial="'+val.short_name+'"></figure>';
+	}
+	var can_delete = '';
+	if(val.can_delete){
+		can_delete = '<div class="float-right text-primary"><a href="#" class="btn btn-icon btn-sm btn-danger delete_comment" data-id="'+val.id+'" data-toggle="tooltip" title="Delete"><i class="fas fa-trash"></i></a></div>';
+	}
+	return '<ul class="list-unstyled list-unstyled-border mt-3">'+
+		'<li class="media">'+profile+
+		'<div class="media-body">'+
+			'<div class="float-right text-primary">'+val.created+'</div>'+
+			'<div class="media-title">'+val.first_name+' '+val.last_name+'</div>'+can_delete+
+			'<span class="text-muted">'+val.message+'</span>'+
+		'</div>'+
+		'</li>'+
+		'</ul>';
+}
+
+function taskUserAvatarHtml(val){
+	if(val.profile_url){
+		return '<figure class="avatar avatar-sm mr-1">'+
+			'<img src="'+val.profile_url+'" alt="'+val.first_name+' '+val.last_name+'" data-toggle="tooltip" data-placement="top" title="'+val.first_name+' '+val.last_name+'">'+
+		'</figure>';
+	}
+	return '<figure class="avatar avatar-sm bg-primary text-white mr-1" data-initial="'+val.first_name.charAt(0)+''+val.last_name.charAt(0)+'" data-toggle="tooltip" data-placement="top" title="'+val.first_name+' '+val.last_name+'"></figure>';
+}
+
+var task_comments_last_id = 0;
+var task_comments_timer = null;
+
+function loadTaskComments(task_id, only_new){
+	var data = "type=task_comment&to_id="+task_id;
+	if(only_new && task_comments_last_id){
+		data += "&last_id="+task_comments_last_id;
+	}
+	$.ajax({
+		type: "POST",
+		url: base_url+'projects/get_comments',
+		data: data,
+		dataType: "json",
+		success: function(result)
+		{
+			if(result['error'] == false && result['data']){
+				var html = '';
+				$.each(result['data'], function (key, val) {
+					html += commentItemHtml(val);
+				});
+				if(result['data'].length){
+					var newest_id = parseInt(result['data'][0].id, 10);
+					if(newest_id > task_comments_last_id){
+						task_comments_last_id = newest_id;
+					}
+				}
+				if(only_new){
+					if(html){
+						$("#comments_append").prepend(html);
+					}
+				}else{
+					$("#comments_append").html(html);
+				}
+			}else if(!only_new){
+				$("#comments_append").html('');
+			}
+		}
+	});
+}
+
+function startTaskCommentsLive(task_id){
+	stopTaskCommentsLive();
+	task_comments_timer = setInterval(function(){
+		if(!$("#comments_append").closest('.modal').is(':visible')){
+			stopTaskCommentsLive();
+			return;
+		}
+		if(document.hidden){
+			return;
+		}
+		loadTaskComments(task_id, true);
+	}, 3000);
+}
+
+function stopTaskCommentsLive(){
+	if(task_comments_timer){
+		clearInterval(task_comments_timer);
+		task_comments_timer = null;
+	}
+}
+
+$(document).on('hidden.bs.modal', '.modal', function(){
+	if($(this).find('#comments_append').length){
+		stopTaskCommentsLive();
+	}
+});
+
 var submit_once = 0;
 $("#modal-task-detail").fireModal({
   title: $("#modal-task-detail-part").data('title'),
@@ -3785,48 +3887,7 @@ $("#modal-task-detail").fireModal({
 				}
 				if($("#is_comment").val() == 'true'){
 					$('#message').val('');
-					$.ajax({
-						type: "POST",
-						url: base_url+'projects/get_comments', 
-						data: "type=task_comment&to_id="+$('#comment_task_id').val(),
-						dataType: "json",
-						success: function(result_1) 
-						{	
-							if(result_1['error'] == false){
-								var html = '';
-								var profile = '';
-								$.each(result_1['data'], function (key, val) {
-									if(val.profile){
-										var file_upload_path = '';
-										if(doesFileExist(base_url+'assets/uploads/profiles/'+val.profile)){
-											file_upload_path = base_url+'assets/uploads/profiles/'+val.profile;
-										}else{
-											file_upload_path = base_url+'assets/uploads/f'+saas_id+'/profiles/'+val.profile;
-										}
-										profile = '<figure class="avatar avatar-md mr-3">'+
-											'<img src="'+file_upload_path+'" alt="'+val.first_name+' '+val.last_name+'">'+
-										'</figure>';
-									}else{
-										profile = '<figure class="avatar avatar-md bg-primary text-white mr-3" data-initial="'+val.short_name+'"></figure>';
-									}
-									var can_delete = '';
-									if(val.can_delete){
-										can_delete = '<div class="float-right text-primary"><a href="#" class="btn btn-icon btn-sm btn-danger delete_comment" data-id="'+val.id+'" data-toggle="tooltip" title="Delete"><i class="fas fa-trash"></i></a></div>';
-									}
-									html += '<ul class="list-unstyled list-unstyled-border mt-3">'+
-									'<li class="media">'+profile+
-									'<div class="media-body">'+
-										'<div class="float-right text-primary">'+val.created+'</div>'+
-										'<div class="media-title">'+val.first_name+' '+val.last_name+'</div>'+can_delete+
-										'<span class="text-muted">'+val.message+'</span>'+
-									'</div>'+
-									'</li>'+
-									'</ul>';
-								});
-								$("#comments_append").html(html);
-							}
-						}        
-					});
+					loadTaskComments($('#comment_task_id').val(), true);
 				}
 		    }else{
 				modal.find('.modal-body').append('<div class="alert alert-danger">'+result['message']+'</div>');
@@ -3875,8 +3936,8 @@ $(document).on('click','.modal-task-detail',function(e){
 
         	if(result['error'] == false){
 
-				
-				$("#comments_append").html();
+
+				$("#comments_append").html('');
 
 				if(result['data'][0]['can_see_time'] && is_module_allowed_timesheet){
 					$('#timer_btn').removeClass('d-none');
@@ -3915,73 +3976,18 @@ $(document).on('click','.modal-task-detail',function(e){
 
 				var profile_1 = '';
 				$.each(result['data'][0]['task_users'], function (key, val) {
-					if(val.profile){
-						
-						var file_upload_path = '';
-						if(doesFileExist(base_url+'assets/uploads/profiles/'+val.profile)){
-							file_upload_path = base_url+'assets/uploads/profiles/'+val.profile;
-						}else{
-							file_upload_path = base_url+'assets/uploads/f'+saas_id+'/profiles/'+val.profile;
-						}
-
-						profile_1 += '<figure class="avatar avatar-sm mr-1">'+
-										'<img src="'+file_upload_path+'" alt="'+val.first_name+' '+val.last_name+'" data-toggle="tooltip" data-placement="top" title="'+val.first_name+' '+val.last_name+'">'+
-									'</figure>';
-					}else{
-						profile_1 += '<figure class="avatar avatar-sm bg-primary text-white mr-1" data-initial="'+val.first_name.charAt(0)+''+val.last_name.charAt(0)+'" data-toggle="tooltip" data-placement="top" title="'+val.first_name+' '+val.last_name+'"></figure>';
-					}
+					profile_1 += taskUserAvatarHtml(val);
 				});
 
 				$("#task_users").html(profile_1);
-				
-				$("#modal-task-detail").trigger("click");
-				 
-				$("#comments-tab").trigger("click");
-				
-				$.ajax({
-					type: "POST",
-					url: base_url+'projects/get_comments', 
-					data: "type=task_comment&to_id="+result['data'][0]['id'],
-					dataType: "json",
-					success: function(result_1) 
-					{	
-						if(result_1['error'] == false){
-							var html = '';
-							var profile = '';
-							$.each(result_1['data'], function (key, val) {
-								
-								if(val.profile){
-									var file_upload_path = '';
-									if(doesFileExist(base_url+'assets/uploads/profiles/'+val.profile)){
-										file_upload_path = base_url+'assets/uploads/profiles/'+val.profile;
-									}else{
-										file_upload_path = base_url+'assets/uploads/f'+saas_id+'/profiles/'+val.profile;
-									}
 
-									profile = '<figure class="avatar avatar-md mr-3">'+
-										'<img src="'+file_upload_path+'" alt="'+val.first_name+' '+val.last_name+'">'+
-									'</figure>';
-								}else{
-									profile = '<figure class="avatar avatar-md bg-primary text-white mr-3" data-initial="'+val.short_name+'"></figure>';
-								}
-								var can_delete = '';
-								if(val.can_delete){
-									can_delete = '<div class="float-right text-primary"><a href="#" class="btn btn-icon btn-sm btn-danger delete_comment" data-id="'+val.id+'" data-toggle="tooltip" title="Delete"><i class="fas fa-trash"></i></a></div>';
-								}
-								html += '<ul class="list-unstyled list-unstyled-border mt-3">'+
-								'<li class="media">'+profile+
-								  '<div class="media-body">'+
-									'<div class="float-right text-primary">'+val.created+'</div>'+
-									'<div class="media-title">'+val.first_name+' '+val.last_name+'</div>'+can_delete+
-									'<span class="text-muted">'+val.message+'</span>'+
-								  '</div>'+
-								'</li>'+
-							  	'</ul>';
-							});
-							$("#comments_append").html(html);
-						}
-					}        
-				});
+				$("#modal-task-detail").trigger("click");
+
+				$("#comments-tab").trigger("click");
+
+				task_comments_last_id = 0;
+				loadTaskComments(result['data'][0]['id']);
+				startTaskCommentsLive(result['data'][0]['id']);
 
     		}else{
     			iziToast.error({

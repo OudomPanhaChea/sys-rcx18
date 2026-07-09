@@ -45,6 +45,40 @@
           </div>
           <div class="section-body">
             <?php
+            // Status view tabs: the grid shows only active work (Not Started +
+            // On Going) by default; Done / Failed are separate views reached
+            // via ?status=N. Keep the other filters when switching tabs.
+            $status_query = $_GET;
+            unset($status_query['status']);
+            $status_base = base_url('projects') . (empty($status_query) ? '' : '?' . http_build_query($status_query));
+            $status_prefix = base_url('projects') . '?' . http_build_query($status_query);
+            $status_prefix .= empty($status_query) ? 'status=' : '&status=';
+            $active_status = (isset($_GET['status']) && is_numeric($_GET['status'])) ? (int) $_GET['status'] : null;
+            ?>
+            <nav class="status-tabs"
+              aria-label="<?= $this->lang->line('status') ? htmlspecialchars($this->lang->line('status')) : 'Status' ?>">
+              <a href="<?= htmlspecialchars($status_base) ?>"
+                class="status-tab <?= $active_status === null ? 'active' : '' ?>"
+                <?= $active_status === null ? 'aria-current="page"' : '' ?>>
+                <i class="fas fa-bolt" aria-hidden="true"></i>
+                <span><?= $this->lang->line('active') ? htmlspecialchars($this->lang->line('active')) : 'Active' ?></span>
+                <span class="status-tab__count"><?= isset($status_counts['active']) ? $status_counts['active'] : 0 ?></span>
+              </a>
+              <?php foreach ($project_status as $status) {
+                if ((int) $status['id'] <= 2) continue;
+                $status_icon = ((int) $status['id'] === 4) ? 'fa-times-circle' : 'fa-check-circle'; ?>
+                <a href="<?= htmlspecialchars($status_prefix . $status['id']) ?>"
+                  class="status-tab tab-<?= htmlspecialchars($status['class']) ?> <?= $active_status === (int) $status['id'] ? 'active' : '' ?>"
+                  <?= $active_status === (int) $status['id'] ? 'aria-current="page"' : '' ?>>
+                  <i class="fas <?= $status_icon ?>" aria-hidden="true"></i>
+                  <span><?= htmlspecialchars($status['title']) ?></span>
+                  <span
+                    class="status-tab__count"><?= isset($status_counts[(int) $status['id']]) ? $status_counts[(int) $status['id']] : 0 ?></span>
+                </a>
+              <?php } ?>
+            </nav>
+
+            <?php
             // Preserve current filters when switching category via the stat chips.
             // Drop the previously selected issue too, since it may belong to a
             // different category than the one being switched to.
@@ -88,19 +122,6 @@
                       <?php foreach ($projects_all as $project_all) { ?>
                         <option value="<?= base_url("projects/detail/" . htmlspecialchars($project_all['id'])) ?>">
                           <?= htmlspecialchars($project_all['title']) ?>
-                        </option>
-                      <?php } ?>
-                    </select>
-                  </div>
-
-                  <div class="projects-filterbar__field">
-                    <select class="form-control select2 project_filter">
-                      <option value="<?= base_url("projects") ?>">
-                        <?= $this->lang->line('select_status') ? $this->lang->line('select_status') : 'Select Status' ?>
-                      </option>
-                      <?php foreach ($project_status as $status) { ?>
-                        <option value="<?= base_url("projects?status=" . htmlspecialchars($status['id'])) ?>"
-                          <?= (isset($_GET['status']) && !empty($_GET['status']) && is_numeric($_GET['status']) && $_GET['status'] == $status['id']) ? "selected" : "" ?>><?= htmlspecialchars($status['title']) ?>
                         </option>
                       <?php } ?>
                     </select>

@@ -263,6 +263,7 @@ class Users extends CI_Controller
 			if(!empty($system_user)){
 				$tempRow['id'] = $system_user->id;
 				$tempRow['profile'] = $system_user->profile;
+				$tempRow['profile_url'] = profile_pic_url($system_user->profile);
 				$tempRow['first_name'] = $system_user->first_name;
 				$tempRow['last_name'] = $system_user->last_name;
 				$tempRow['company'] = company_details('company_name', $system_user->id);

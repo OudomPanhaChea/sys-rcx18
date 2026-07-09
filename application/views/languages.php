@@ -686,6 +686,14 @@
                                     <input type="text" name="finished" value="<?=$this->lang->line('finished')?htmlspecialchars($this->lang->line('finished')):'Finished'?>" class="form-control">
                                 </div>
                                 <div class="form-group col-md-6">
+                                    <label>Done</label>
+                                    <input type="text" name="done" value="<?=$this->lang->line('done')?htmlspecialchars($this->lang->line('done')):'Done'?>" class="form-control">
+                                </div>
+                                <div class="form-group col-md-6">
+                                    <label>Failed</label>
+                                    <input type="text" name="failed" value="<?=$this->lang->line('failed')?htmlspecialchars($this->lang->line('failed')):'Failed'?>" class="form-control">
+                                </div>
+                                <div class="form-group col-md-6">
                                     <label>Today</label>
                                     <input type="text" name="today" value="<?=$this->lang->line('today')?htmlspecialchars($this->lang->line('today')):'Today'?>" class="form-control">
                                 </div>

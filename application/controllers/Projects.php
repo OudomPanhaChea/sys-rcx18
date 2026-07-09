@@ -1457,15 +1457,33 @@ class Projects extends CI_Controller
 			$category_filter = (isset($_GET['category']) && !empty($_GET['category']) && is_numeric($_GET['category']))?$_GET['category']:'';
 			$issue_filter = (isset($_GET['issue']) && !empty($_GET['issue']) && is_numeric($_GET['issue']))?$_GET['issue']:'';
 
+			// The grid only shows Not Started + On Going by default; Done and
+			// Failed projects are reached through the status tabs (?status=N),
+			// which go through the regular status filter above.
+			$status_scope = (isset($_GET['status']) && !empty($_GET['status']) && is_numeric($_GET['status'])) ? '' : 'active';
+
 			// The issue filter dropdown lists every issue when no category is
 			// selected, but narrows to the active category's issues once one is.
 			$this->data['project_issues'] = project_issues($category_filter);
 
 			$count_user_id = $this->ion_auth->is_admin() ? '' : $this->session->userdata('user_id');
 
+			// Counts for the status tabs (Active / Done / Failed), respecting the
+			// current category + issue filters and the user's project visibility.
+			$status_counts = array();
+			$status_counts['active'] = $this->projects_model->count_projects($count_user_id, '', '', $category_filter, $issue_filter, 'active');
+			if(!empty($this->data['project_status'])){
+				foreach($this->data['project_status'] as $status_row){
+					if((int)$status_row['id'] > 2){
+						$status_counts[(int)$status_row['id']] = $this->projects_model->count_projects($count_user_id, 'status', $status_row['id'], $category_filter, $issue_filter);
+					}
+				}
+			}
+			$this->data['status_counts'] = $status_counts;
+
 			$config = array();
 			$config["base_url"] = base_url('projects');
-			$config["total_rows"] = $this->projects_model->count_projects($count_user_id, $filter_type, $filter, $category_filter, $issue_filter);
+			$config["total_rows"] = $this->projects_model->count_projects($count_user_id, $filter_type, $filter, $category_filter, $issue_filter, $status_scope);
 			$config["per_page"] = 10;
 			$config["uri_segment"] = 2;
 			// Keep the active filters (?category, ?status, ...) on every page link
@@ -1508,10 +1526,10 @@ class Projects extends CI_Controller
 			$this->data["links"] = $this->pagination->create_links();
 
 			if($this->ion_auth->is_admin()){
-				$this->data['projects'] = $this->projects_model->get_projects('','',$config["per_page"], $page, $filter_type, $filter, $category_filter, $issue_filter);
+				$this->data['projects'] = $this->projects_model->get_projects('','',$config["per_page"], $page, $filter_type, $filter, $category_filter, $issue_filter, $status_scope);
 				$this->data['projects_all'] = $this->projects_model->get_projects();
 			}else{
-				$this->data['projects'] = $this->projects_model->get_projects($this->session->userdata('user_id'),'',$config["per_page"], $page, $filter_type, $filter, $category_filter, $issue_filter);
+				$this->data['projects'] = $this->projects_model->get_projects($this->session->userdata('user_id'),'',$config["per_page"], $page, $filter_type, $filter, $category_filter, $issue_filter, $status_scope);
 				$this->data['projects_all'] = $this->projects_model->get_projects($this->session->userdata('user_id'));
 			}
 			$this->load->view('projects',$this->data);
@@ -1542,24 +1560,24 @@ class Projects extends CI_Controller
 			$this->data['category_filter'] = $category_filter;
 			$this->data['issue_filter']    = $issue_filter;
 
-			// Per-user AI config (each user brings their own Gemini key). Only
-			// show the user's OWN key in the setup box, never the shared fallback.
-			$has_own = user_has_own_ai_key();
-			$this->data['has_own_ai_key'] = $has_own;
-			$this->data['ai_api_key'] = '';
-			$this->data['ai_model']   = 'gemini-2.5-flash';
-			if($has_own){
-				$own = get_ai_settings($this->session->userdata('user_id'));
-				$this->data['ai_api_key'] = (!empty($own->api_key)) ? $own->api_key : '';
-				$this->data['ai_model']   = (!empty($own->model)) ? $own->model : 'gemini-2.5-flash';
-			}
-			// Effective key presence (own or shared fallback) — enables generation.
-			$this->data['ai_key_present'] = (ai_api_key() !== '');
+			// Per-user AI config (each user brings their own keys). The modal
+			// only ever shows the user's OWN keys.
+			$this->load->library('ai/Ai_client');
+			$this->data['has_own_ai_key'] = user_has_own_ai_key();
+			$this->data['ai_settings']    = ai_settings();
+			$this->data['ai_models'] = array(
+				'gemini' => Gemini_provider::models(),
+				'groq'   => Groq_provider::models(),
+			);
+			// Primary provider has a key — enables generation.
+			$this->data['ai_key_present'] = ai_ready();
 
+			// Only active work (Not Started + On Going) is reportable; Done and
+			// Failed projects stay out of the assistant's list.
 			if($this->ion_auth->is_admin()){
-				$projects = $this->projects_model->get_projects('', '', '', '', '', '', $category_filter, $issue_filter);
+				$projects = $this->projects_model->get_projects('', '', '', '', '', '', $category_filter, $issue_filter, 'active');
 			}else{
-				$projects = $this->projects_model->get_projects($this->session->userdata('user_id'), '', '', '', '', '', $category_filter, $issue_filter);
+				$projects = $this->projects_model->get_projects($this->session->userdata('user_id'), '', '', '', '', '', $category_filter, $issue_filter, 'active');
 			}
 
 			// Attach the extracted username + linked account to each project so
@@ -1581,14 +1599,17 @@ class Projects extends CI_Controller
 	}
 
 	/**
-	 * AJAX: generate a unique TikTok report/appeal message for one project
-	 * using the configured AI provider. Returns JSON {error, message, text}.
+	 * AJAX: generate a unique report/appeal message for one project using the
+	 * configured AI provider (with automatic fallback). Accepts an optional
+	 * `custom_prompt` with extra instructions from the user.
+	 * Returns JSON {error, message, text, provider}.
 	 */
 	public function generate_report_message()
 	{
 		if ($this->ion_auth->logged_in() && is_module_allowed('projects') && !$this->ion_auth->in_group(3) && ($this->ion_auth->is_admin() || permissions('project_view')))
 		{
 			$this->form_validation->set_rules('project_id', 'Project ID', 'trim|required|strip_tags|xss_clean|is_numeric');
+			$this->form_validation->set_rules('custom_prompt', 'Custom prompt', 'trim|strip_tags|xss_clean|max_length[500]');
 
 			if($this->form_validation->run() == FALSE){
 				$this->data['error'] = true;
@@ -1597,7 +1618,7 @@ class Projects extends CI_Controller
 				return;
 			}
 
-			if(ai_api_key() === ''){
+			if(!ai_ready()){
 				$this->data['error'] = true;
 				$this->data['message'] = $this->lang->line('ai_not_configured') ? $this->lang->line('ai_not_configured') : 'Add your own AI API key first (the key icon at the top of this page).';
 				echo json_encode($this->data);
@@ -1623,14 +1644,22 @@ class Projects extends CI_Controller
 				return;
 			}
 
-			$username = extract_tiktok_username($project['title']);
-			$linked   = extract_linked_account($project['description']);
-			$category = !empty($project['category_title']) ? $project['category_title'] : 'TikTok';
-			$issue    = !empty($project['issue_title']) ? $project['issue_title'] : 'Account Banned';
+			$linked = extract_linked_account($project['description']);
 
-			$prompt = $this->build_report_prompt($username, $linked, $category, $issue);
+			$this->load->library('ai/Ai_client');
+			$builder = new Report_prompt_builder();
+			$prompts = $builder->build(array(
+				'category'           => !empty($project['category_title']) ? $project['category_title'] : 'TikTok',
+				'issue'              => !empty($project['issue_title']) ? $project['issue_title'] : 'Account Banned',
+				'username'           => extract_tiktok_username($project['title']),
+				'email'              => $linked['email'],
+				'phone'              => $linked['phone'],
+				'custom_instruction' => (string)$this->input->post('custom_prompt'),
+			));
 
-			$result = ai_generate_text($prompt, 1.15);
+			$result = $this->ai_client->generate($prompts['system'], $prompts['user'], array(
+				'temperature' => $prompts['temperature'],
+			));
 
 			if($result['error']){
 				$this->data['error'] = true;
@@ -1642,6 +1671,7 @@ class Projects extends CI_Controller
 			$this->data['error'] = false;
 			$this->data['message'] = 'Success';
 			$this->data['text'] = $result['text'];
+			$this->data['provider'] = $result['provider'];
 			echo json_encode($this->data);
 		}else{
 			$this->data['error'] = true;
@@ -1651,52 +1681,38 @@ class Projects extends CI_Controller
 	}
 
 	/**
-	 * Assemble the AI prompt for one report message. A random nonce plus an
-	 * explicit "make it unique" instruction keeps every project's message
-	 * differently worded even for the same issue.
-	 */
-	private function build_report_prompt($username, $linked, $category, $issue)
-	{
-		$account = ($username !== '') ? $username : 'my account';
-
-		$contact_bits = array();
-		if(!empty($linked['email'])){ $contact_bits[] = 'email '.$linked['email']; }
-		if(!empty($linked['phone'])){ $contact_bits[] = 'phone '.$linked['phone']; }
-		$contact = empty($contact_bits) ? '' : (' It is linked to '.implode(' and ', $contact_bits).'.');
-
-		$nonce = substr(md5(uniqid((string)mt_rand(), true)), 0, 8);
-
-		$prompt  = "Write the 'additional details' message a real person would submit to ".$category." Support to appeal/report a problem with their own account.\n";
-		$prompt .= "Issue: \"".$issue."\".\n";
-		$prompt .= "Account handle: ".$account.".".$contact."\n\n";
-		$prompt .= "Write in first person as the account owner. Length: 3-4 sentences, about 45-75 words — long enough to be clear and credible to a support agent, short enough to read quickly. ";
-		$prompt .= "Tone: calm, polite, genuinely human — a real user who is concerned but respectful. Use everyday words and contractions; avoid robotic, salesy, or templated phrasing and avoid dramatic pleading. ";
-		$prompt .= "Briefly confirm the account is mine (reference the handle, and the linked contact as proof of ownership if provided), explain the \"".$issue."\" situation plainly, and politely ask the team to review and restore access. ";
-		$prompt .= "Do NOT invent facts, dates, or reasons that weren't provided. No greeting line, no sign-off, no placeholders like [name], no markdown, no quotes — output only the message text. ";
-		$prompt .= "Vary the wording so it reads as freshly written (id ".$nonce.").";
-
-		return $prompt;
-	}
-
-	/**
-	 * AJAX: save the CURRENT user's own AI key (type ai_assistant_user_{id}).
+	 * AJAX: save the CURRENT user's own AI settings (type ai_assistant_user_{id}):
+	 * primary provider, Gemini key/model, Groq key/model, auto-fallback flag.
 	 * Available to any project-viewer (not clients) so members who can't reach
-	 * the admin Settings page can still configure their own key.
+	 * the admin Settings page can still configure their own keys.
 	 */
 	public function save_ai_key()
 	{
 		if ($this->ion_auth->logged_in() && is_module_allowed('projects') && !$this->ion_auth->in_group(3) && ($this->ion_auth->is_admin() || permissions('project_view')))
 		{
-			$this->form_validation->set_rules('api_key', 'API key', 'trim|xss_clean');
-			$this->form_validation->set_rules('model', 'model', 'trim|xss_clean');
+			$this->form_validation->set_rules('provider', 'provider', 'trim|xss_clean');
+			$this->form_validation->set_rules('api_key', 'Gemini API key', 'trim|xss_clean');
+			$this->form_validation->set_rules('model', 'Gemini model', 'trim|xss_clean');
+			$this->form_validation->set_rules('groq_api_key', 'Groq API key', 'trim|xss_clean');
+			$this->form_validation->set_rules('groq_model', 'Groq model', 'trim|xss_clean');
+			$this->form_validation->set_rules('auto_fallback', 'auto fallback', 'trim|xss_clean');
 
 			if($this->form_validation->run() == TRUE){
-				$api_key = trim($this->input->post('api_key'));
+				$provider = trim($this->input->post('provider'));
+				if($provider !== 'gemini' && $provider !== 'groq'){
+					$provider = 'gemini';
+				}
+				$gemini_key = trim($this->input->post('api_key'));
+				$groq_key   = trim($this->input->post('groq_api_key'));
+
 				$data_json = array(
-					'enabled'  => $api_key !== '' ? '1' : '0',
-					'provider' => 'gemini',
-					'api_key'  => $api_key,
-					'model'    => trim($this->input->post('model')) ? trim($this->input->post('model')) : 'gemini-2.5-flash',
+					'enabled'       => ($gemini_key !== '' || $groq_key !== '') ? '1' : '0',
+					'provider'      => $provider,
+					'api_key'       => $gemini_key,
+					'model'         => trim($this->input->post('model')) ? trim($this->input->post('model')) : 'gemini-2.5-flash',
+					'groq_api_key'  => $groq_key,
+					'groq_model'    => trim($this->input->post('groq_model')) ? trim($this->input->post('groq_model')) : 'llama-3.3-70b-versatile',
+					'auto_fallback' => ($this->input->post('auto_fallback') == '1') ? '1' : '0',
 				);
 				$type = 'ai_assistant_user_'.(int)$this->session->userdata('user_id');
 
@@ -1721,17 +1737,19 @@ class Projects extends CI_Controller
 	}
 
 	/**
-	 * AJAX: test the key/model typed into the Report Assistant setup box before
-	 * saving. Uses the posted key + model directly.
+	 * AJAX: test the provider/key/model typed into the Report Assistant setup
+	 * box before saving. Uses the posted values directly.
 	 */
 	public function test_ai_key()
 	{
 		if ($this->ion_auth->logged_in() && is_module_allowed('projects') && !$this->ion_auth->in_group(3) && ($this->ion_auth->is_admin() || permissions('project_view')))
 		{
-			$api_key = trim($this->input->post('api_key'));
-			$model   = trim($this->input->post('model'));
-
-			$result = ai_generate_text('Reply with exactly the word: OK', 0.2, $api_key, $model);
+			$this->load->library('ai/Ai_client');
+			$result = $this->ai_client->test(
+				trim($this->input->post('provider')),
+				trim($this->input->post('api_key')),
+				trim($this->input->post('model'))
+			);
 
 			if(!$result['error']){
 				$this->data['error'] = false;
@@ -2399,8 +2417,17 @@ class Projects extends CI_Controller
 	{
 		if ($this->ion_auth->logged_in())
 		{
+			$to_id = $this->input->post('to_id');
+			if(empty($to_id) || !is_numeric($to_id)){
+				$this->data['error'] = true;
+				$this->data['message'] = 'Invalid request';
+				echo json_encode($this->data);
+				return;
+			}
+			$last_id = $this->input->post('last_id');
+			$last_id = (!empty($last_id) && is_numeric($last_id))?$last_id:'';
 			$this->data['error'] = false;
-			$this->data['data'] = $this->projects_model->get_comments('task_comment','',$this->input->post('to_id'));
+			$this->data['data'] = $this->projects_model->get_comments('task_comment','',$this->input->post('to_id'),$last_id);
 			$this->data['message'] = 'Successful';
 			echo json_encode($this->data);
 		}else{

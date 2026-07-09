@@ -122,6 +122,10 @@
 
   /* Message cell */
   .ra-msgcol { min-width: 320px; }
+  .ra-gen { display: flex; flex-direction: column; gap: 8px; }
+  .ra-prompt { width: 100%; font-size: 12.5px; padding: 8px 11px; }
+  .ra-gen .btn-generate { align-self: flex-start; }
+  .ra-gen + .ra-msg { margin-top: 8px; }
   .ra-msg { margin-top: 2px; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
   .ra-msg__head { display: flex; align-items: center; gap: 4px; padding: 4px 5px 4px 11px; border-bottom: 1px solid var(--line); background: #fff; }
   .ra-msg__age { font-size: 11px; color: #aeb4bc; }
@@ -152,6 +156,26 @@
   .ra-lbl { font-size: 10.5px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; color: var(--muted); display: block; margin-bottom: 5px; }
   .ra-hint { font-size: 12px; color: var(--muted); margin-top: 6px; }
   .ra-help-link { color: var(--pri); font-weight: 600; }
+
+  /* Provider segmented control */
+  .ra-seg { display: flex; gap: 6px; padding: 4px; border: 1px solid var(--line); border-radius: 10px; background: var(--pri-soft); }
+  .ra-seg__opt { flex: 1; border: 0; background: transparent; border-radius: 7px; padding: 8px 10px; font-size: 13px; font-weight: 600; color: var(--muted); cursor: pointer; display: inline-flex; align-items: center; justify-content: center; gap: 7px; transition: background-color .15s, color .15s, box-shadow .15s; }
+  .ra-seg__opt:hover { color: var(--pri); }
+  .ra-seg__opt.is-active { background: #fff; color: var(--pri); box-shadow: 0 1px 3px rgba(24,32,42,.12); }
+  .ra-seg__opt:focus-visible { outline: none; box-shadow: 0 0 0 3px var(--pri-ring); }
+
+  /* Provider sections in the modal */
+  .ra-provpane { border: 1px solid var(--line); border-radius: 11px; padding: 12px 13px; margin-top: 12px; transition: border-color .15s; }
+  .ra-provpane.is-primary { border-color: var(--pri); }
+  .ra-provpane__head { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
+  .ra-provpane__name { font-weight: 700; font-size: 13px; color: var(--ink); }
+  .ra-provpane__tag { font-size: 10px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; color: var(--pri); background: var(--pri-light); border-radius: 999px; padding: 2px 8px; display: none; }
+  .ra-provpane.is-primary .ra-provpane__tag { display: inline-block; }
+
+  /* Fallback checkbox */
+  .ra-checkline { display: flex; align-items: flex-start; gap: 9px; margin-top: 14px; cursor: pointer; font-size: 13px; color: var(--ink); }
+  .ra-checkline input { margin-top: 3px; accent-color: var(--pri); cursor: pointer; }
+  .ra-checkline small { display: block; color: var(--muted); font-size: 11.5px; margin-top: 1px; }
 
   @media (max-width: 767px) { .ra-msgcol { min-width: 0; } .ra-toolbar { flex-direction: column; align-items: stretch; } }
   @media (prefers-reduced-motion: reduce) { .ra *, .ra-modal * { transition: none !important; } }
@@ -216,10 +240,15 @@
                 </div>
 
                 <div class="ra-toolbar__group">
-                  <button type="button" class="ra-control <?= !empty($ai_key_present) ? 'ra-control--on' : 'ra-control--off' ?>" id="ai_status_pill" data-toggle="modal" data-target="#aiKeyModal" aria-label="AI key settings">
+                  <?php
+                    $ai_primary       = $ai_settings['provider'];
+                    $ai_primary_label = ($ai_primary === 'groq') ? 'Groq' : 'Gemini';
+                    $ai_status_model  = $ai_primary_label.' &middot; '.htmlspecialchars($ai_settings[$ai_primary]['model']);
+                  ?>
+                  <button type="button" class="ra-control <?= !empty($ai_key_present) ? 'ra-control--on' : 'ra-control--off' ?>" id="ai_status_pill" data-toggle="modal" data-target="#aiKeyModal" aria-label="AI settings">
                     <span class="ra-dot" aria-hidden="true"></span>
                     <span id="ai_status_text"><?= !empty($ai_key_present) ? 'AI ready' : ($this->lang->line('set_up_key') ? $this->lang->line('set_up_key') : 'Set up AI key') ?></span>
-                    <?php if (!empty($ai_key_present)) { ?><code id="ai_status_model"><?= htmlspecialchars($ai_model) ?></code><?php } ?>
+                    <?php if (!empty($ai_key_present)) { ?><code id="ai_status_model"><?= $ai_status_model ?></code><?php } ?>
                     <i class="fas fa-cog ra-control__ic" aria-hidden="true"></i>
                   </button>
                   <span class="ra-runstat" id="genall_status"></span>
@@ -301,9 +330,14 @@
                             </button>
                           </td>
                           <td class="ra-msgcol">
-                            <button type="button" class="ra-btn ra-btn--ghost ra-btn--sm btn-generate" <?= empty($ai_key_present) ? 'disabled' : '' ?>>
-                              <i class="fas fa-magic" aria-hidden="true"></i> <?= $this->lang->line('generate') ? $this->lang->line('generate') : 'Generate' ?>
-                            </button>
+                            <div class="ra-gen">
+                              <input type="text" class="ra-input ra-prompt" maxlength="500"
+                                     placeholder="<?= $this->lang->line('ai_extra_prompt_ph') ? $this->lang->line('ai_extra_prompt_ph') : 'Add extra instruction for AI (optional)&hellip; e.g. Mention that I already submitted multiple appeals.' ?>"
+                                     aria-label="Extra instruction for AI (optional)" <?= empty($ai_key_present) ? 'disabled' : '' ?>>
+                              <button type="button" class="ra-btn ra-btn--ghost ra-btn--sm btn-generate" <?= empty($ai_key_present) ? 'disabled' : '' ?>>
+                                <i class="fas fa-magic" aria-hidden="true"></i> <?= $this->lang->line('generate') ? $this->lang->line('generate') : 'Generate' ?>
+                              </button>
+                            </div>
                             <div class="ra-msg report-output" style="display:none;">
                               <div class="ra-msg__head">
                                 <span class="ra-msg__age msg-age"></span>
@@ -342,43 +376,81 @@
     <div class="modal-dialog modal-dialog-centered" role="document">
       <div class="modal-content">
         <div class="modal-header">
-          <h5 class="modal-title" id="aiKeyTitle"><i class="fas fa-key mr-1" aria-hidden="true"></i> <?= $this->lang->line('your_ai_key') ? $this->lang->line('your_ai_key') : 'Your AI Key' ?></h5>
+          <h5 class="modal-title" id="aiKeyTitle"><i class="fas fa-key mr-1" aria-hidden="true"></i> <?= $this->lang->line('ai_settings') ? $this->lang->line('ai_settings') : 'AI Settings' ?></h5>
           <button type="button" class="close" data-dismiss="modal" aria-label="Close"><span aria-hidden="true">&times;</span></button>
         </div>
         <div class="modal-body">
-          <div class="mb-3">
-            <label for="ai_api_key" class="ra-lbl"><?= $this->lang->line('gemini_api_key') ? $this->lang->line('gemini_api_key') : 'Gemini API key' ?></label>
-            <input type="text" id="ai_api_key" class="ra-input ra-input--mono" style="width:100%;" placeholder="AIza&hellip;" value="<?= !empty($ai_api_key) ? htmlspecialchars($ai_api_key) : '' ?>">
-            <div class="ra-hint"><a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener" class="ra-help-link"><?= $this->lang->line('get_free_key') ? $this->lang->line('get_free_key') : 'Get a free key' ?> <i class="fas fa-external-link-alt" style="font-size:10px;" aria-hidden="true"></i></a></div>
+          <!-- Primary provider -->
+          <label class="ra-lbl"><?= $this->lang->line('ai_provider') ? $this->lang->line('ai_provider') : 'Provider' ?></label>
+          <div class="ra-seg" role="radiogroup" aria-label="Primary AI provider" id="ai_provider_seg">
+            <button type="button" class="ra-seg__opt <?= $ai_settings['provider'] === 'gemini' ? 'is-active' : '' ?>" data-provider="gemini" role="radio" aria-checked="<?= $ai_settings['provider'] === 'gemini' ? 'true' : 'false' ?>"><i class="fas fa-gem" aria-hidden="true"></i> Gemini</button>
+            <button type="button" class="ra-seg__opt <?= $ai_settings['provider'] === 'groq' ? 'is-active' : '' ?>" data-provider="groq" role="radio" aria-checked="<?= $ai_settings['provider'] === 'groq' ? 'true' : 'false' ?>"><i class="fas fa-bolt" aria-hidden="true"></i> Groq</button>
           </div>
-          <div class="mb-2">
-            <label for="ai_model" class="ra-lbl"><?= $this->lang->line('model') ? $this->lang->line('model') : 'Model' ?></label>
-            <span class="ra-control">
-              <i class="fas fa-microchip ra-control__ic" aria-hidden="true"></i>
-              <select id="ai_model" class="ra-control__select" aria-label="AI model">
-                <?php
-                  $free_models = array(
-                    'gemini-2.5-flash'      => 'Gemini 2.5 Flash - balanced (recommended)',
-                    'gemini-2.5-flash-lite' => 'Gemini 2.5 Flash-Lite - fastest',
-                    'gemini-2.0-flash'      => 'Gemini 2.0 Flash - stable',
-                    'gemini-2.0-flash-lite' => 'Gemini 2.0 Flash-Lite - light',
-                    'gemini-1.5-flash'      => 'Gemini 1.5 Flash - legacy',
-                  );
-                  $sel_model = !empty($ai_model) ? $ai_model : 'gemini-2.5-flash';
-                  foreach ($free_models as $mid => $label) {
-                    echo '<option value="'.htmlspecialchars($mid).'"'.($sel_model == $mid ? ' selected' : '').'>'.htmlspecialchars($label).'</option>';
-                  }
-                ?>
-              </select>
-              <i class="fas fa-chevron-down ra-control__caret" aria-hidden="true"></i>
+
+          <!-- Gemini -->
+          <div class="ra-provpane <?= $ai_settings['provider'] === 'gemini' ? 'is-primary' : '' ?>" data-pane="gemini">
+            <div class="ra-provpane__head">
+              <span class="ra-provpane__name">Gemini</span>
+              <span class="ra-provpane__tag"><?= $this->lang->line('primary') ? $this->lang->line('primary') : 'Primary' ?></span>
+            </div>
+            <div class="mb-3">
+              <label for="ai_api_key" class="ra-lbl"><?= $this->lang->line('gemini_api_key') ? $this->lang->line('gemini_api_key') : 'Gemini API key' ?></label>
+              <input type="text" id="ai_api_key" class="ra-input ra-input--mono" style="width:100%;" placeholder="AIza&hellip;" value="<?= htmlspecialchars($ai_settings['gemini']['api_key']) ?>">
+              <div class="ra-hint"><a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener" class="ra-help-link"><?= $this->lang->line('get_free_key') ? $this->lang->line('get_free_key') : 'Get a free key' ?> <i class="fas fa-external-link-alt" style="font-size:10px;" aria-hidden="true"></i></a></div>
+            </div>
+            <div class="mb-1">
+              <label for="ai_model" class="ra-lbl"><?= $this->lang->line('model') ? $this->lang->line('model') : 'Model' ?></label>
+              <span class="ra-control">
+                <i class="fas fa-microchip ra-control__ic" aria-hidden="true"></i>
+                <select id="ai_model" class="ra-control__select" aria-label="Gemini model">
+                  <?php foreach ($ai_models['gemini'] as $mid => $label) {
+                    echo '<option value="'.htmlspecialchars($mid).'"'.($ai_settings['gemini']['model'] == $mid ? ' selected' : '').'>'.htmlspecialchars($label).'</option>';
+                  } ?>
+                </select>
+                <i class="fas fa-chevron-down ra-control__caret" aria-hidden="true"></i>
+              </span>
+            </div>
+          </div>
+
+          <!-- Groq -->
+          <div class="ra-provpane <?= $ai_settings['provider'] === 'groq' ? 'is-primary' : '' ?>" data-pane="groq">
+            <div class="ra-provpane__head">
+              <span class="ra-provpane__name">Groq</span>
+              <span class="ra-provpane__tag"><?= $this->lang->line('primary') ? $this->lang->line('primary') : 'Primary' ?></span>
+            </div>
+            <div class="mb-3">
+              <label for="groq_api_key" class="ra-lbl"><?= $this->lang->line('groq_api_key') ? $this->lang->line('groq_api_key') : 'Groq API key' ?></label>
+              <input type="text" id="groq_api_key" class="ra-input ra-input--mono" style="width:100%;" placeholder="gsk_&hellip;" value="<?= htmlspecialchars($ai_settings['groq']['api_key']) ?>">
+              <div class="ra-hint"><a href="https://console.groq.com/keys" target="_blank" rel="noopener" class="ra-help-link"><?= $this->lang->line('get_free_key') ? $this->lang->line('get_free_key') : 'Get a free key' ?> <i class="fas fa-external-link-alt" style="font-size:10px;" aria-hidden="true"></i></a></div>
+            </div>
+            <div class="mb-1">
+              <label for="groq_model" class="ra-lbl"><?= $this->lang->line('model') ? $this->lang->line('model') : 'Model' ?></label>
+              <span class="ra-control">
+                <i class="fas fa-microchip ra-control__ic" aria-hidden="true"></i>
+                <select id="groq_model" class="ra-control__select" aria-label="Groq model">
+                  <?php foreach ($ai_models['groq'] as $mid => $label) {
+                    echo '<option value="'.htmlspecialchars($mid).'"'.($ai_settings['groq']['model'] == $mid ? ' selected' : '').'>'.htmlspecialchars($label).'</option>';
+                  } ?>
+                </select>
+                <i class="fas fa-chevron-down ra-control__caret" aria-hidden="true"></i>
+              </span>
+            </div>
+          </div>
+
+          <!-- Auto fallback -->
+          <label class="ra-checkline" for="ai_fallback">
+            <input type="checkbox" id="ai_fallback" value="1" <?= $ai_settings['auto_fallback'] ? 'checked' : '' ?>>
+            <span>
+              <?= $this->lang->line('ai_auto_fallback') ? $this->lang->line('ai_auto_fallback') : 'Auto fallback' ?>
+              <small><?= $this->lang->line('ai_auto_fallback_hint') ? $this->lang->line('ai_auto_fallback_hint') : 'If the primary provider fails (timeout, rate limit, error), automatically retry with the other one.' ?></small>
             </span>
-            <div class="ra-hint"><?= $this->lang->line('models_same_key') ? $this->lang->line('models_same_key') : 'All models are free and use the same key.' ?></div>
-          </div>
-          <div id="ai_key_result"></div>
+          </label>
+
+          <div id="ai_key_result" class="mt-3"></div>
         </div>
         <div class="modal-footer" style="justify-content:space-between;">
           <button type="button" class="ra-btn ra-btn--ghost ra-btn--sm" id="ai_test_btn"><i class="fas fa-plug" aria-hidden="true"></i> <?= $this->lang->line('test') ? $this->lang->line('test') : 'Test' ?></button>
-          <button type="button" class="ra-btn ra-btn--primary ra-btn--sm" id="ai_save_btn"><i class="fas fa-save" aria-hidden="true"></i> <?= $this->lang->line('save_key') ? $this->lang->line('save_key') : 'Save key' ?></button>
+          <button type="button" class="ra-btn ra-btn--primary ra-btn--sm" id="ai_save_btn"><i class="fas fa-save" aria-hidden="true"></i> <?= $this->lang->line('save') ? $this->lang->line('save') : 'Save' ?></button>
         </div>
       </div>
     </div>
@@ -392,6 +464,8 @@
       var saveUrl = '<?= base_url('projects/save-ai-key') ?>';
       var testUrl = '<?= base_url('projects/test-ai-key') ?>';
       var raUserId = '<?= (int)$this->session->userdata('user_id') ?>';
+      var raPrimary = '<?= $ai_settings['provider'] ?>';
+      var PROVIDER_LABELS = { gemini: 'Gemini', groq: 'Groq' };
 
       var MSG_TTL = 12 * 60 * 60 * 1000;
       var MSG_STORE = 'ra_msg_v1';
@@ -411,7 +485,14 @@
         else { legacy(text); cb(); }
       }
       function legacy(text) { var t = $('<textarea>').val(text).css({ position: 'fixed', top: '-1000px' }).appendTo('body'); t.get(0).select(); document.execCommand('copy'); t.remove(); }
-      function swalError(msg) { if (typeof swal === 'function') swal('Error', msg, 'error'); else alert(msg); }
+      function toastOk(title, msg) { if (window.iziToast) iziToast.success({ title: title, message: msg || '', position: 'topRight', timeout: 2500 }); }
+      function toastErr(msg) { if (window.iziToast) iziToast.error({ title: 'Error', message: msg, position: 'topRight', timeout: 4500 }); else alert(msg); }
+      // Which provider actually wrote the message — flags the fallback in the toast.
+      function providerNote(res) {
+        if (!res || !res.provider) return '';
+        var label = PROVIDER_LABELS[res.provider] || res.provider;
+        return (res.provider !== raPrimary) ? label + ' (fallback)' : label;
+      }
 
       /* ----- contact email ----- */
       function buildEmails() {
@@ -449,18 +530,33 @@
 
       /* ----- generate ----- */
       function generateRow(row) {
-        var gen = row.find('.btn-generate'), regen = row.find('.btn-regenerate'), edit = row.find('.btn-edit');
+        var gen = row.find('.btn-generate'), regen = row.find('.btn-regenerate'), edit = row.find('.btn-edit'), prompt = row.find('.ra-prompt');
         var hasCard = row.find('.report-output').is(':visible');
-        gen.attr('disabled', true); regen.attr('disabled', true); edit.attr('disabled', true);
+        gen.attr('disabled', true); regen.attr('disabled', true); edit.attr('disabled', true); prompt.attr('disabled', true);
         var genOld = gen.html(), regenOld = regen.html();
-        if (hasCard) regen.html('<i class="fas fa-spinner fa-spin" aria-hidden="true"></i>'); else gen.html('<i class="fas fa-spinner fa-spin" aria-hidden="true"></i>');
-        return $.ajax({ type: 'POST', url: genUrl, data: { project_id: row.data('project-id') }, dataType: 'json' })
+        if (hasCard) regen.html('<i class="fas fa-spinner fa-spin" aria-hidden="true"></i>'); else gen.html('<i class="fas fa-spinner fa-spin" aria-hidden="true"></i> Generating&hellip;');
+        return $.ajax({
+          type: 'POST', url: genUrl, dataType: 'json',
+          data: { project_id: row.data('project-id'), custom_prompt: $.trim(prompt.val() || '') }
+        })
           .done(function (res) { if (res && res.error === false) { setCached(row.data('project-id'), res.text); showMessage(row, res.text, Date.now()); } })
-          .always(function () { gen.attr('disabled', false).html(genOld); regen.attr('disabled', false).html(regenOld); edit.attr('disabled', false); });
+          .always(function () { gen.attr('disabled', false).html(genOld); regen.attr('disabled', false).html(regenOld); edit.attr('disabled', false); prompt.attr('disabled', false); });
       }
       $(document).on('click', '.btn-generate, .btn-regenerate', function () {
-        generateRow($(this).closest('tr')).done(function (res) { if (!res || res.error !== false) swalError(res ? res.message : 'Request failed.'); })
-          .fail(function () { swalError('Request failed. Please try again.'); });
+        generateRow($(this).closest('tr'))
+          .done(function (res) {
+            if (res && res.error === false) toastOk('Message generated', providerNote(res));
+            else toastErr(res ? res.message : 'Request failed.');
+          })
+          .fail(function () { toastErr('Request failed. Please try again.'); });
+      });
+      // Enter inside the extra-prompt input triggers Generate/Regenerate.
+      $(document).on('keydown', '.ra-prompt', function (e) {
+        if (e.key !== 'Enter') return;
+        e.preventDefault();
+        var row = $(this).closest('tr'),
+            btn = row.find('.report-output').is(':visible') ? row.find('.btn-regenerate') : row.find('.btn-generate');
+        if (!btn.attr('disabled')) btn.trigger('click');
       });
 
       /* ----- generate all ----- */
@@ -478,13 +574,13 @@
         function finish(msg) { running = false; btn.find('i').attr('class', 'fas fa-bolt'); label.text('Generate all'); $('#genall_status').text(msg || ''); }
         function next() {
           if (cancel) { finish('Stopped ' + done + '/' + total); return; }
-          if (!pending.length) { finish('Done ' + done + '/' + total); return; }
+          if (!pending.length) { finish('Done ' + done + '/' + total); toastOk('All messages generated', done + ' of ' + total); return; }
           var row = $(pending.shift());
           $('#genall_status').text((done + 1) + '/' + total + '…');
           generateRow(row).done(function (res) {
             if (res && res.error === false) { done++; setBar(done, total); setTimeout(next, 900); }
-            else { finish(res ? res.message : 'Failed'); swalError(res ? res.message : 'Request failed.'); }
-          }).fail(function () { finish('Request failed'); swalError('Request failed. Please try again.'); });
+            else { finish(res ? res.message : 'Failed'); toastErr(res ? res.message : 'Request failed.'); }
+          }).fail(function () { finish('Request failed'); toastErr('Request failed. Please try again.'); });
         }
         next();
       });
@@ -565,23 +661,45 @@
         if (e.key === 'Escape') { e.preventDefault(); endEdit($(this).closest('.ra-msg'), false); }
       });
 
-      /* ----- AI key modal ----- */
-      function setStatus(ok, model) {
+      /* ----- AI settings modal ----- */
+      function currentProvider() { return $('#ai_provider_seg .ra-seg__opt.is-active').data('provider') || 'gemini'; }
+      function providerKey(p)    { return $.trim((p === 'groq' ? $('#groq_api_key') : $('#ai_api_key')).val() || ''); }
+      function providerModel(p)  { return (p === 'groq' ? $('#groq_model') : $('#ai_model')).val(); }
+
+      $('#ai_provider_seg').on('click', '.ra-seg__opt', function () {
+        var p = $(this).data('provider');
+        $('#ai_provider_seg .ra-seg__opt').removeClass('is-active').attr('aria-checked', 'false');
+        $(this).addClass('is-active').attr('aria-checked', 'true');
+        $('.ra-provpane').removeClass('is-primary').filter('[data-pane="' + p + '"]').addClass('is-primary');
+      });
+
+      function setStatus(ok, label) {
         var pill = $('#ai_status_pill');
         pill.removeClass('ra-control--on ra-control--off').addClass(ok ? 'ra-control--on' : 'ra-control--off');
         $('#ai_status_text').text(ok ? 'AI ready' : 'Set up AI key');
-        if (ok) { if ($('#ai_status_model').length) $('#ai_status_model').text(model); else $('#ai_status_text').after('<code id="ai_status_model">' + model + '</code>'); }
+        if (ok) { if ($('#ai_status_model').length) $('#ai_status_model').html(label); else $('#ai_status_text').after('<code id="ai_status_model">' + label + '</code>'); }
+        else { $('#ai_status_model').remove(); }
       }
       $('#ai_save_btn').on('click', function () {
         var btn = $(this), res = $('#ai_key_result'), old = btn.html();
         btn.attr('disabled', true).html('<i class="fas fa-spinner fa-spin" aria-hidden="true"></i>'); res.html('');
-        $.ajax({ type: 'POST', url: saveUrl, dataType: 'json', data: { api_key: $('#ai_api_key').val(), model: $('#ai_model').val() } })
+        $.ajax({ type: 'POST', url: saveUrl, dataType: 'json', data: {
+          provider:      currentProvider(),
+          api_key:       $('#ai_api_key').val(),
+          model:         $('#ai_model').val(),
+          groq_api_key:  $('#groq_api_key').val(),
+          groq_model:    $('#groq_model').val(),
+          auto_fallback: $('#ai_fallback').is(':checked') ? '1' : '0'
+        } })
           .done(function (r) {
             var cls = (r && r.error === false) ? 'alert-success' : 'alert-danger';
             res.html('<div class="alert ' + cls + ' py-2 mb-0">' + (r ? r.message : '') + '</div>');
             if (r && r.error === false) {
-              $('.btn-generate, #generate_all_btn').attr('disabled', false);
-              setStatus($('#ai_api_key').val().trim() !== '', $('#ai_model').val());
+              raPrimary = currentProvider();
+              var ready = providerKey(raPrimary) !== '';
+              $('.btn-generate, #generate_all_btn, .ra-prompt').attr('disabled', !ready);
+              setStatus(ready, PROVIDER_LABELS[raPrimary] + ' &middot; ' + providerModel(raPrimary));
+              toastOk('AI settings saved', ready ? '' : 'Add an API key for ' + PROVIDER_LABELS[raPrimary] + ' to enable generation.');
               setTimeout(function () { $('#aiKeyModal').modal('hide'); res.html(''); }, 900);
             }
           })
@@ -589,9 +707,9 @@
           .always(function () { btn.attr('disabled', false).html(old); });
       });
       $('#ai_test_btn').on('click', function () {
-        var btn = $(this), res = $('#ai_key_result'), old = btn.html();
+        var btn = $(this), res = $('#ai_key_result'), old = btn.html(), p = currentProvider();
         btn.attr('disabled', true).html('<i class="fas fa-spinner fa-spin" aria-hidden="true"></i>'); res.html('');
-        $.ajax({ type: 'POST', url: testUrl, dataType: 'json', data: { api_key: $('#ai_api_key').val(), model: $('#ai_model').val() } })
+        $.ajax({ type: 'POST', url: testUrl, dataType: 'json', data: { provider: p, api_key: providerKey(p), model: providerModel(p) } })
           .done(function (r) { var cls = (r && r.error === false) ? 'alert-success' : 'alert-danger'; res.html('<div class="alert ' + cls + ' py-2 mb-0">' + (r ? r.message : '') + '</div>'); })
           .fail(function () { res.html('<div class="alert alert-danger py-2 mb-0">Could not connect.</div>'); })
           .always(function () { btn.attr('disabled', false).html(old); });

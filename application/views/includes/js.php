@@ -141,15 +141,9 @@ convert_estimate_to_invoice = "<?=$this->lang->line('convert_estimate_to_invoice
 
 
                 var $profile = '';
-                var $file_upload_path = '';
 
-                if(typeof(notification['profile']) != "undefined" && notification['profile'] !== null && notification['profile'] !== ''){ 
-                    if(doesFileExist(base_url+'assets/uploads/profiles/'+notification['profile'])){
-                        $file_upload_path = 'assets/uploads/profiles/'+notification['profile'];
-                    }else{
-                        $file_upload_path = 'assets/uploads/f<?=$this->session->userdata('saas_id')?>/profiles/'+notification['profile'];
-                    } 
-                    $profile = '<figure class="dropdown-item-icon avatar avatar-m bg-transparent"><img src="'+base_url+''+$file_upload_path+'" alt="'+notification['first_name']+' '+notification['last_name']+'" data-toggle="tooltip" data-placement="top" title="'+notification['first_name']+' '+notification['last_name']+'" data-original-title=""></figure>';
+                if(typeof(notification['profile_url']) != "undefined" && notification['profile_url'] !== null && notification['profile_url'] !== ''){
+                    $profile = '<figure class="dropdown-item-icon avatar avatar-m bg-transparent"><img src="'+notification['profile_url']+'" alt="'+notification['first_name']+' '+notification['last_name']+'" data-toggle="tooltip" data-placement="top" title="'+notification['first_name']+' '+notification['last_name']+'" data-original-title=""></figure>';
                 }else{
                     $profile = '<figure class="dropdown-item-icon avatar avatar-m bg-primary text-white" data-initial="" data-toggle="tooltip" data-placement="top" title="'+notification['first_name'].substr(0, 1)+''+notification['last_name'].substr(0, 1)+'" data-original-title="'+notification['first_name']+' '+notification['last_name']+'"></figure>';
                 }

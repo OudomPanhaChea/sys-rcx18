@@ -322,68 +322,16 @@ $current_lang = get_languages('', $default_language);
 
                   var profile_1 = '';
                   $.each(result['data'][0]['task_users'], function (key, val) {
-                    if(val.profile){
-                      var file_upload_path = '';
-                      if(doesFileExist(base_url+'assets/uploads/profiles/'+val.profile)){
-                        file_upload_path = base_url+'assets/uploads/profiles/'+val.profile;
-                      }else{
-                        file_upload_path = base_url+'assets/uploads/f'+saas_id+'/profiles/'+val.profile;
-                      }
-                      profile_1 += '<figure class="avatar avatar-sm mr-1">'+
-                              '<img src="'+file_upload_path+'" alt="'+val.first_name+' '+val.last_name+'" data-toggle="tooltip" data-placement="top" title="'+val.first_name+' '+val.last_name+'">'+
-                            '</figure>';
-                    }else{
-                      profile_1 += '<figure class="avatar avatar-sm bg-primary text-white mr-1" data-initial="'+val.first_name.charAt(0)+''+val.last_name.charAt(0)+'" data-toggle="tooltip" data-placement="top" title="'+val.first_name+' '+val.last_name+'"></figure>';
-                    }
+                    profile_1 += taskUserAvatarHtml(val);
                   });
 
                   $("#task_users").html(profile_1);
-                  
-                  $("#modal-task-detail").trigger("click");
-                  
-                  $.ajax({
-                    type: "POST",
-                    url: base_url+'projects/get_comments', 
-                    data: "type=task_comment&to_id="+result['data'][0]['id'],
-                    dataType: "json",
-                    success: function(result_1) 
-                    {	
-                      if(result_1['error'] == false){
-                        var html = '';
-                        var profile = '';
-                        $.each(result_1['data'], function (key, val) {
-                          if(val.profile){
-                            
-                            var file_upload_path = '';
-                            if(doesFileExist(base_url+'assets/uploads/profiles/'+val.profile)){
-                              file_upload_path = base_url+'assets/uploads/profiles/'+val.profile;
-                            }else{
-                              file_upload_path = base_url+'assets/uploads/f'+saas_id+'/profiles/'+val.profile;
-                            }
 
-                            profile = '<figure class="avatar avatar-md mr-3">'+
-                              '<img src="'+file_upload_path+'" alt="'+val.first_name+' '+val.last_name+'">'+
-                            '</figure>';
-                          }else{
-                            profile = '<figure class="avatar avatar-md bg-primary text-white mr-3" data-initial="'+val.short_name+'"></figure>';
-                          }
-                          if(val.can_delete){
-                            var can_delete = '<div class="float-right text-primary"><a href="#" class="btn btn-icon btn-sm btn-danger delete_comment" data-id="'+val.id+'" data-toggle="tooltip" title="Delete"><i class="fas fa-trash"></i></a></div>';
-                          }
-                          html += '<ul class="list-unstyled list-unstyled-border mt-3">'+
-                          '<li class="media">'+profile+
-                            '<div class="media-body">'+
-                            '<div class="float-right text-primary">'+val.created+'</div>'+
-                            '<div class="media-title">'+val.first_name+' '+val.last_name+'</div>'+can_delete+
-                            '<span class="text-muted">'+val.message+'</span>'+
-                            '</div>'+
-                          '</li>'+
-                            '</ul>';
-                        });
-                        $("#comments_append").html(html);
-                      }
-                    }        
-                  });
+                  $("#modal-task-detail").trigger("click");
+
+                  task_comments_last_id = 0;
+                  loadTaskComments(result['data'][0]['id']);
+                  startTaskCommentsLive(result['data'][0]['id']);
 
                 }else{
                   iziToast.error({
