@@ -30,6 +30,8 @@
             <?php if (($this->ion_auth->is_admin() || permissions('task_view')) && is_module_allowed('tasks')){ ?>
               <a href="<?=base_url("projects/tasks/".htmlspecialchars($project['id']))?>" class="btn btn-icon icon-left btn-primary"><i class="fas fa-tasks"></i> <?=$this->lang->line('tasks')?$this->lang->line('tasks'):'Tasks'?></a>
             <?php } ?>
+
+            <a href="#" class="btn btn-icon icon-left btn-primary project-invoice-btn" data-id="<?=htmlspecialchars($project['id'])?>"><i class="fas fa-file-invoice-dollar"></i> <?=$this->lang->line('invoice')?$this->lang->line('invoice'):'Invoice'?></a>
             
             
             <?php if (($this->ion_auth->is_admin() || permissions('calendar_view')) && is_module_allowed('calendar')){ ?>
@@ -156,27 +158,6 @@
                 </div>
               </div>
               
-              <div class="col-md-6">
-                <div class="card card-primary">
-                  <div class="card-header">
-                    <h4><?=$this->lang->line('project')?htmlspecialchars($this->lang->line('project')):'Project'?> <?=$this->lang->line('progress')?htmlspecialchars($this->lang->line('progress')):'Progress'?></h4>
-                  </div>
-                  <div class="card-body">
-                    <canvas id="project_progress" height="auto"></canvas>
-                  </div>
-                </div>
-              </div>
-
-              <div class="col-md-6">
-                <div class="card card-primary">
-                  <div class="card-header">
-                    <h4><?=$this->lang->line('tasks_statistics')?htmlspecialchars($this->lang->line('tasks_statistics')):'Tasks Statistics'?></h4>
-                  </div>
-                  <div class="card-body">
-                    <canvas id="project_statistics" height="auto"></canvas>
-                  </div>
-                </div>
-              </div>
               <div class="col-md-12">
                 <div class="card card-primary">
                   <div class="card-header">
@@ -212,67 +193,6 @@
                   </div>
                 </div>
               </div>
-              <div class="col-md-6">
-                <div class="card card-primary">
-                  <div class="card-header">
-                    <h4><?=$this->lang->line('upload_project_files')?$this->lang->line('upload_project_files'):'Upload Project Files'?></h4>
-                  </div>
-                  <div class="card-body">
-                    <form action="<?=base_url('projects/upload-files/'.htmlspecialchars($project['id']))?>" class="dropzone" id="mydropzone">
-                      <div class="fallback">
-                        <input name="file" type="file" multiple />
-                      </div>
-                    </form>
-                    
-                    <?php
-                      if(!is_storage_limit_exceeded()){ ?>
-                        <div class="alert alert-danger mt-2">
-                          <?=$this->lang->line('storage_limit_exceeded')?$this->lang->line('storage_limit_exceeded'):'Storage Limit Exceeded'?>
-                        </div>
-				            <?php } ?>
-                  </div>
-                </div>
-              </div>
-              <div class="col-md-6">
-                <div class="card card-primary">
-                  <div class="card-header">
-                    <h4><?=$this->lang->line('project_files')?$this->lang->line('project_files'):'Project Files'?></h4>
-                  </div>
-                  <div class="card-body"> 
-                    <table class='table-striped' id='file_list'
-                      data-toggle="table"
-                      data-url="<?=base_url('projects/get_project_files/'.htmlspecialchars($project['id']))?>"
-                      data-click-to-select="true"
-                      data-side-pagination="server"
-                      data-pagination="false"
-                      data-page-list="[5, 10, 20, 50, 100, 200]"
-                      data-search="false" data-show-columns="false"
-                      data-show-refresh="false" data-trim-on-search="false"
-                      data-sort-name="first_name" data-sort-order="asc"
-                      data-mobile-responsive="true"
-                      data-toolbar="" data-show-export="false"
-                      data-maintain-selected="true"
-                      data-export-types='["txt","excel"]'
-                      data-export-options='{
-                        "fileName": "users-list",
-                        "ignoreColumn": ["state"] 
-                      }'
-                      data-query-params="queryParams">
-                      <thead>
-                        <tr>
-                          <th data-field="file_name" data-sortable="true"><?=$this->lang->line('file')?$this->lang->line('file'):'File'?></th>
-                          <th data-field="file_type" data-sortable="true"><?=$this->lang->line('file_type')?$this->lang->line('file_type'):'File Type'?></th>
-                          <th data-field="file_size" data-sortable="true"><?=$this->lang->line('size')?$this->lang->line('size'):'Size'?></th>
-                          <th data-field="action" data-sortable="false"><?=$this->lang->line('action')?$this->lang->line('action'):'Action'?></th>
-                        </tr>
-                      </thead>
-                    </table>
-                  </div>
-                </div>
-              </div>
-              
-
-              
 								<div class="col-md-12">
                   <div class="card card-primary" id="project-comment-card">
                     <div class="card-header">
@@ -373,14 +293,30 @@
       <input type="number" pattern="[0-9]" name="budget" id="budget" class="form-control">
     </div>
     <div class="form-group col-md-6">
-      <label><?=$this->lang->line('status')?$this->lang->line('status'):'Status'?><span class="text-danger">*</span></label>
-      <select name="status" id="status" class="form-control select2">
-        <?php foreach($project_status as $status){ ?>
-        <option value="<?=htmlspecialchars($status['id'])?>"><?=htmlspecialchars($status['title'])?></option>
-        <?php } ?>
-      </select>
+      <label><?=$this->lang->line('booking')?$this->lang->line('booking'):'Booking'?> (<?=get_currency('currency_symbol')?>)</label>
+      <input type="number" step="any" min="0" name="booking" id="booking" class="form-control">
     </div>
   </span>
+
+  <span class="row">
+    <div class="form-group col-md-6">
+      <label><?=$this->lang->line('account_url')?$this->lang->line('account_url'):'Account URL'?></label>
+      <input type="url" name="account_url" id="account_url" class="form-control" placeholder="https://">
+    </div>
+    <div class="form-group col-md-6">
+      <label><?=$this->lang->line('username_or_id')?$this->lang->line('username_or_id'):'Username or ID'?></label>
+      <input type="text" name="account_username" id="account_username" class="form-control">
+    </div>
+  </span>
+
+  <div class="form-group">
+    <label><?=$this->lang->line('status')?$this->lang->line('status'):'Status'?><span class="text-danger">*</span></label>
+    <select name="status" id="status" class="form-control select2">
+      <?php foreach($project_status as $status){ ?>
+      <option value="<?=htmlspecialchars($status['id'])?>"><?=htmlspecialchars($status['title'])?></option>
+      <?php } ?>
+    </select>
+  </div>
 
   <div class="form-group">
     <label><?=$this->lang->line('project_users')?$this->lang->line('project_users'):'Project Users'?> <i class="fas fa-question-circle" data-toggle="tooltip" data-placement="right" title="<?=$this->lang->line('add_users_who_will_work_on_this_project_only_this_users_are_able_to_see_this_project')?$this->lang->line('add_users_who_will_work_on_this_project_only_this_users_are_able_to_see_this_project'):"Add users who will work on this project. Only this users are able to see this project."?>"></i></label>
@@ -404,36 +340,12 @@
 
 <div id="modal-edit-project"></div>
 
-<?php
-  foreach($task_status as $task_title){
-    $tmpT[] =  htmlspecialchars($task_title['title']);
-    if($this->ion_auth->is_admin()){
-      $tmpTV[] =  get_count('id','tasks','status='.htmlspecialchars($task_title['id']).' AND project_id='.htmlspecialchars($project['id']));
-    }elseif($this->ion_auth->in_group(4)){
-      $tmpTV[] =  get_count('t.id','tasks t LEFT JOIN projects p on t.project_id = p.id','p.client_id = '.htmlspecialchars($this->session->userdata('user_id')).' AND t.status = '.htmlspecialchars($task_title['id']).' AND t.project_id='.htmlspecialchars($project['id']));
-    }else{
-      $tmpTV[] =  get_count('t.id','tasks t LEFT JOIN task_users tu ON t.id=tu.task_id','status='.$task_title['id'].' AND tu.user_id='.htmlspecialchars($this->session->userdata('user_id')).' AND project_id='.htmlspecialchars($project['id']));
-    }
-  }
-
-  $progres_count = 0;
-  if($project['total_tasks'] > 0){
-    $progres_count = ($project['completed_tasks'] / $project['total_tasks']) * 100;
-  }
-  $progres_count = round($progres_count);
-
-?>
-
 <?php $this->load->view('includes/js'); ?>
 
 <script>
   project_id = "<?=htmlspecialchars($project['id'])?>";
-  task_status = '<?=json_encode($tmpT)?>';
-  task_status_values = '<?=json_encode($tmpTV)?>';
-  progres_count = '<?=$progres_count?>';
-
 </script>
-<script src="<?=base_url('assets/js/page/projects-details.js')?>"></script>
+<?php $this->load->view('includes/invoice-modal'); ?>
 
 </body>
 </html>

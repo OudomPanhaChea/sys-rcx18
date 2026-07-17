@@ -203,13 +203,6 @@
                   foreach ($projects as $project) {
                 ?>
                     <?php
-                    /* ---- Progress ---- */
-                    $progres_count = 0;
-                    if ($project['total_tasks'] > 0) {
-                      $progres_count = ($project['completed_tasks'] / $project['total_tasks']) * 100;
-                    }
-                    $progres_count = round($progres_count);
-
                     /* ---- Team (overlapping avatar stack, capped at 5 + overflow) ---- */
                     $team = !empty($project['project_users']) ? $project['project_users'] : array();
                     $team_total = count($team);
@@ -261,6 +254,14 @@
                               </div>
                             <?php } ?>
                             <div class="dropdown project-card__menu">
+                              <?php if (!empty($project['account_url'])) { ?>
+                                <a href="<?= htmlspecialchars($project['account_url']) ?>" target="_blank"
+                                  rel="noopener noreferrer" class="project-card__cog project-card__account-link"
+                                  data-toggle="tooltip" data-placement="top"
+                                  title="<?= $this->lang->line('view_account') ? htmlspecialchars($this->lang->line('view_account')) : 'View Account' ?>"
+                                  aria-label="<?= $this->lang->line('view_account') ? htmlspecialchars($this->lang->line('view_account')) : 'View Account' ?>"><i
+                                    class="fas fa-external-link-alt"></i></a>
+                              <?php } ?>
                               <a href="#" class="project-card__cog" data-toggle="dropdown" aria-label="Project options"><i
                                   class="fas fa-ellipsis-h"></i></a>
                               <div class="dropdown-menu dropdown-menu-right">
@@ -274,6 +275,8 @@
                                   <a class="dropdown-item"
                                     href="<?= base_url("projects/tasks/" . htmlspecialchars($project['id'])) ?>"><?= $this->lang->line('tasks') ? $this->lang->line('tasks') : 'Tasks' ?></a>
                                 <?php } ?>
+                                <a href="#" class="dropdown-item project-invoice-btn"
+                                  data-id="<?= htmlspecialchars($project['id']) ?>"><?= $this->lang->line('invoice') ? $this->lang->line('invoice') : 'Invoice' ?></a>
                                 <?php if ($this->ion_auth->is_admin() || permissions('project_delete')) { ?>
                                   <div class="dropdown-divider"></div>
                                   <a href="#" class="text-danger delete_project dropdown-item"
@@ -298,21 +301,6 @@
                           <p class="project-card__desc<?= $desc === '' ? ' is-empty' : '' ?>">
                             <?= $desc !== '' ? htmlspecialchars($desc) : ($this->lang->line('no_description') ? htmlspecialchars($this->lang->line('no_description')) : 'No description added yet.') ?>
                           </p>
-
-                          <div class="project-card__progress">
-                            <div class="project-card__progress-head">
-                              <span
-                                class="project-card__subtitle"><?= $this->lang->line('progress') ? htmlspecialchars($this->lang->line('progress')) : 'Progress' ?></span>
-                              <span
-                                class="project-card__progress-meta"><?= htmlspecialchars($project['completed_tasks']) ?>/<?= htmlspecialchars($project['total_tasks']) ?>
-                                <?= $this->lang->line('task_completed') ? htmlspecialchars($this->lang->line('task_completed')) : 'Tasks' ?>
-                                &middot; <strong><?= $progres_count ?>%</strong></span>
-                            </div>
-                            <div class="progress">
-                              <div class="progress-bar" role="progressbar" data-width="<?= $progres_count ?>%"
-                                aria-valuenow="<?= $progres_count ?>" aria-valuemin="0" aria-valuemax="100"></div>
-                            </div>
-                          </div>
 
                           <div class="project-card__footer">
                             <?php if ($team_total) { ?>
@@ -421,15 +409,32 @@
         <input type="number" pattern="[0-9]" name="budget" class="form-control">
       </div>
       <div class="form-group col-md-6">
-        <label><?= $this->lang->line('status') ? $this->lang->line('status') : 'Status' ?><span
-            class="text-danger">*</span></label>
-        <select name="status" class="form-control select2">
-          <?php foreach ($project_status as $status) { ?>
-            <option value="<?= htmlspecialchars($status['id']) ?>"><?= htmlspecialchars($status['title']) ?></option>
-          <?php } ?>
-        </select>
+        <label><?= $this->lang->line('booking') ? $this->lang->line('booking') : 'Booking' ?>
+          (<?= get_currency('currency_symbol') ?>)</label>
+        <input type="number" step="any" min="0" name="booking" class="form-control">
       </div>
     </span>
+
+    <span class="row">
+      <div class="form-group col-md-6">
+        <label><?= $this->lang->line('account_url') ? $this->lang->line('account_url') : 'Account URL' ?></label>
+        <input type="url" name="account_url" class="form-control" placeholder="https://">
+      </div>
+      <div class="form-group col-md-6">
+        <label><?= $this->lang->line('username_or_id') ? $this->lang->line('username_or_id') : 'Username or ID' ?></label>
+        <input type="text" name="account_username" class="form-control">
+      </div>
+    </span>
+
+    <div class="form-group">
+      <label><?= $this->lang->line('status') ? $this->lang->line('status') : 'Status' ?><span
+          class="text-danger">*</span></label>
+      <select name="status" class="form-control select2">
+        <?php foreach ($project_status as $status) { ?>
+          <option value="<?= htmlspecialchars($status['id']) ?>"><?= htmlspecialchars($status['title']) ?></option>
+        <?php } ?>
+      </select>
+    </div>
 
     <span class="row">
       <div class="form-group col-md-6">
@@ -526,15 +531,32 @@
         <input type="number" pattern="[0-9]" name="budget" id="budget" class="form-control">
       </div>
       <div class="form-group col-md-6">
-        <label><?= $this->lang->line('status') ? $this->lang->line('status') : 'Status' ?><span
-            class="text-danger">*</span></label>
-        <select name="status" id="status" class="form-control select2">
-          <?php foreach ($project_status as $status) { ?>
-            <option value="<?= htmlspecialchars($status['id']) ?>"><?= htmlspecialchars($status['title']) ?></option>
-          <?php } ?>
-        </select>
+        <label><?= $this->lang->line('booking') ? $this->lang->line('booking') : 'Booking' ?>
+          (<?= get_currency('currency_symbol') ?>)</label>
+        <input type="number" step="any" min="0" name="booking" id="booking" class="form-control">
       </div>
     </span>
+
+    <span class="row">
+      <div class="form-group col-md-6">
+        <label><?= $this->lang->line('account_url') ? $this->lang->line('account_url') : 'Account URL' ?></label>
+        <input type="url" name="account_url" id="account_url" class="form-control" placeholder="https://">
+      </div>
+      <div class="form-group col-md-6">
+        <label><?= $this->lang->line('username_or_id') ? $this->lang->line('username_or_id') : 'Username or ID' ?></label>
+        <input type="text" name="account_username" id="account_username" class="form-control">
+      </div>
+    </span>
+
+    <div class="form-group">
+      <label><?= $this->lang->line('status') ? $this->lang->line('status') : 'Status' ?><span
+          class="text-danger">*</span></label>
+      <select name="status" id="status" class="form-control select2">
+        <?php foreach ($project_status as $status) { ?>
+          <option value="<?= htmlspecialchars($status['id']) ?>"><?= htmlspecialchars($status['title']) ?></option>
+        <?php } ?>
+      </select>
+    </div>
 
     <span class="row">
       <div class="form-group col-md-6">
@@ -631,6 +653,7 @@
 
   <div id="modal-edit-project"></div>
   <?php $this->load->view('includes/js'); ?>
+  <?php $this->load->view('includes/invoice-modal'); ?>
 </body>
 
 </html>

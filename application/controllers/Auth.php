@@ -673,23 +673,33 @@ class Auth extends CI_Controller
 		$identity_column = $this->config->item('identity', 'ion_auth');
 		$this->data['identity_column'] = $identity_column;
 
+		// Clients created by an admin from the Clients page have no login of
+		// their own: the form posts no email/password, so credentials are
+		// auto-generated and no mail is ever sent to the placeholder address.
+		$is_client_quick_create = ($this->ion_auth->logged_in() && $this->ion_auth->is_admin()
+			&& $this->input->post('groups') == 4 && !$this->input->post('new_register')
+			&& !$this->input->post('email'));
+
 		// validate form input
 		$this->form_validation->set_rules('first_name', $this->lang->line('create_user_validation_fname_label'), 'trim|required|strip_tags|xss_clean');
 		$this->form_validation->set_rules('last_name', $this->lang->line('create_user_validation_lname_label'), 'trim|required|strip_tags|xss_clean');
 
-		if ($identity_column !== 'email')
-		{
-			$this->form_validation->set_rules('identity', $this->lang->line('create_user_validation_identity_label'), 'trim|required|is_unique[' . $tables['users'] . '.' . $identity_column . ']');
-			$this->form_validation->set_rules('email', $this->lang->line('create_user_validation_email_label'), 'trim|required|valid_email');
-		}
-		else
-		{
-			$this->form_validation->set_rules('email', $this->lang->line('create_user_validation_email_label'), 'trim|required|strip_tags|xss_clean|valid_email|is_unique[' . $tables['users'] . '.email]');
+		if(!$is_client_quick_create){
+			if ($identity_column !== 'email')
+			{
+				$this->form_validation->set_rules('identity', $this->lang->line('create_user_validation_identity_label'), 'trim|required|is_unique[' . $tables['users'] . '.' . $identity_column . ']');
+				$this->form_validation->set_rules('email', $this->lang->line('create_user_validation_email_label'), 'trim|required|valid_email');
+			}
+			else
+			{
+				$this->form_validation->set_rules('email', $this->lang->line('create_user_validation_email_label'), 'trim|required|strip_tags|xss_clean|valid_email|is_unique[' . $tables['users'] . '.email]');
+			}
+			$this->form_validation->set_rules('password', $this->lang->line('create_user_validation_password_label'), 'required|min_length[' . $this->config->item('min_password_length', 'ion_auth') . ']|matches[password_confirm]');
+			$this->form_validation->set_rules('password_confirm', $this->lang->line('create_user_validation_password_confirm_label'), 'required');
 		}
 		$this->form_validation->set_rules('phone', $this->lang->line('create_user_validation_phone_label'), 'trim|strip_tags|xss_clean');
 		$this->form_validation->set_rules('company', $this->lang->line('create_user_validation_company_label'), 'trim');
-		$this->form_validation->set_rules('password', $this->lang->line('create_user_validation_password_label'), 'required|min_length[' . $this->config->item('min_password_length', 'ion_auth') . ']|matches[password_confirm]');
-		$this->form_validation->set_rules('password_confirm', $this->lang->line('create_user_validation_password_confirm_label'), 'required');
+		$this->form_validation->set_rules('account_link', $this->lang->line('account_link')?$this->lang->line('account_link'):'Account Link', 'trim|strip_tags|xss_clean');
 
 		if($this->input->post('new_register')){
 			$this->form_validation->set_rules('agree', $this->lang->line('i_agree_to_the_terms_and_conditions')?htmlspecialchars($this->lang->line('i_agree_to_the_terms_and_conditions')):'I agree to the terms and conditions', 'trim|required|strip_tags|xss_clean');
@@ -697,15 +707,41 @@ class Auth extends CI_Controller
 
 		if ($this->form_validation->run() === TRUE)
 		{
-			$email = strtolower($this->input->post('email'));
-			$identity = ($identity_column === 'email') ? $email : $this->input->post('identity');
-			$password = $this->input->post('password');
+			// A client's name must be unique inside the workspace so the same
+			// customer is never created twice.
+			if($this->input->post('groups') == 4){
+				$full_name = strtolower(trim(preg_replace('/\s+/', ' ', trim($this->input->post('first_name')).' '.trim($this->input->post('last_name')))));
+				$duplicate = $this->db->query(
+					"SELECT u.id FROM " . $tables['users'] . " u JOIN " . $tables['users_groups'] . " ug ON ug.user_id = u.id
+					 WHERE ug.group_id = 4 AND u.saas_id = ? AND LOWER(TRIM(CONCAT(u.first_name, ' ', IFNULL(u.last_name, '')))) = ?",
+					array($this->session->userdata('saas_id'), $full_name)
+				);
+				if($duplicate->num_rows() > 0){
+					$this->data['error'] = true;
+					$this->data['message'] = $this->lang->line('a_client_with_this_name_already_exists')?$this->lang->line('a_client_with_this_name_already_exists'):"A client with this name already exists.";
+					echo json_encode($this->data);
+					return false;
+				}
+			}
+
+			if($is_client_quick_create){
+				// Placeholder credentials: the domain is reserved for these
+				// accounts and is filtered out of client-facing output.
+				$email = 'client'.time().mt_rand(1000,9999).'@clients.local';
+				$identity = $email;
+				$password = substr(md5(uniqid(mt_rand(), true)), 0, 16);
+			}else{
+				$email = strtolower($this->input->post('email'));
+				$identity = ($identity_column === 'email') ? $email : $this->input->post('identity');
+				$password = $this->input->post('password');
+			}
 
 			$additional_data = [
 				'first_name' => $this->input->post('first_name'),
 				'last_name' => $this->input->post('last_name'),
 				'company' => $this->input->post('company'),
 				'phone' => $this->input->post('phone'),
+				'account_link' => $this->input->post('account_link'),
 			];
 			$group = array($this->input->post('groups'));
 		}
@@ -817,7 +853,7 @@ class Auth extends CI_Controller
 				$this->settings_model->save_settings($csetting_type,$cdata);
 			}
 
-			if(email_activation()){
+			if(!$is_client_quick_create && email_activation()){
 
 				$this->ion_auth->deactivate($new_user_id);
 				$this->ion_auth_model->clear_messages();
@@ -843,11 +879,13 @@ class Auth extends CI_Controller
 				}
 			}
 			
-			$template_data = array();
-			$template_data['LOGIN_EMAIL'] = $this->input->post('email');
-			$template_data['LOGIN_PASSWORD'] = $this->input->post('password');
-			$email_template = render_email_template('new_user_registration', $template_data);
-			send_mail($this->input->post('email'), $email_template[0]['subject'], $email_template[0]['message']);
+			if(!$is_client_quick_create){
+				$template_data = array();
+				$template_data['LOGIN_EMAIL'] = $this->input->post('email');
+				$template_data['LOGIN_PASSWORD'] = $this->input->post('password');
+				$email_template = render_email_template('new_user_registration', $template_data);
+				send_mail($this->input->post('email'), $email_template[0]['subject'], $email_template[0]['message']);
+			}
 
 			if($this->input->post('delete_lead')){
 				$this->leads_model->delete($this->input->post('delete_lead'));
@@ -959,6 +997,12 @@ class Auth extends CI_Controller
 					'company' => $this->input->post('company'),
 					'phone' => $this->input->post('phone'),
 				];
+
+				// Only the Clients page posts this field; leave it untouched
+				// when other edit forms (users page) submit.
+				if($this->input->post('account_link') !== null){
+					$data['account_link'] = $this->input->post('account_link');
+				}
 
 				if(!empty($profile_pic)){
 					$data["profile"] = $profile_pic;

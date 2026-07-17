@@ -65,7 +65,7 @@
                         </div>
                         <div class="profile-widget-item">
                           <div class="profile-widget-item-label"><?=$this->lang->line('email')?$this->lang->line('email'):'Email'?></div>
-                          <div class="profile-widget-item-value"><?=htmlspecialchars($system_user['email'])?></div>
+                          <div class="profile-widget-item-value"><?=strpos($system_user['email'],'@clients.local')===false?htmlspecialchars($system_user['email']):'&mdash;'?></div>
                         </div>
                       </div>
                       <div class="profile-widget-items">
@@ -74,7 +74,7 @@
                           <div class="profile-widget-item-value"><?=htmlspecialchars($system_user['phone'])?></div>
                         </div>
                         <div class="profile-widget-item">
-                          <div class="profile-widget-item-label"><?=$this->lang->line('company_name')?$this->lang->line('company_name'):'Company Name'?></div>
+                          <div class="profile-widget-item-label"><?=$this->lang->line('company_info')?$this->lang->line('company_info'):'Company Info'?></div>
                           <div class="profile-widget-item-value"><?=htmlspecialchars($system_user['company'])?></div>
                         </div>
                       </div>
@@ -107,25 +107,16 @@
       <input type="text" name="last_name" class="form-control">
     </div>
     <div class="form-group col-md-6">
-      <label><?=$this->lang->line('company_name')?$this->lang->line('company_name'):'Company Name'?></label>
+      <label><?=$this->lang->line('company_info')?$this->lang->line('company_info'):'Company Info'?></label>
       <input type="text" id="company" name="company" class="form-control">
     </div>
-    <div class="form-group col-md-6">
-      <label><?=$this->lang->line('email')?$this->lang->line('email'):'Email'?><span class="text-danger">*</span> <i class="fas fa-question-circle" data-toggle="tooltip" data-placement="right" title="<?=$this->lang->line('this_email_will_not_be_updated_latter')?$this->lang->line('this_email_will_not_be_updated_latter'):'This email will not be updated latter.'?>"></i></label>
-      <input type="email" name="email"  class="form-control">
-    </div>
-
     <div class="form-group col-md-6">
       <label><?=$this->lang->line('mobile')?$this->lang->line('mobile'):'Mobile'?></label>
       <input type="text" name="phone"  class="form-control">
     </div>
-    <div class="form-group col-md-6">
-      <label><?=$this->lang->line('password')?$this->lang->line('password'):'Password'?><span class="text-danger">*</span></label>
-      <input type="text" name="password"  class="form-control">
-    </div>
-    <div class="form-group col-md-6">
-      <label><?=$this->lang->line('confirm_password')?$this->lang->line('confirm_password'):'Confirm Password'?><span class="text-danger">*</span></label>
-      <input type="text" name="password_confirm"  class="form-control">
+    <div class="form-group col-md-12">
+      <label><?=$this->lang->line('account_link')?$this->lang->line('account_link'):'Account Link'?> <i class="fas fa-question-circle" data-toggle="tooltip" data-placement="right" title="<?=$this->lang->line('link_to_the_clients_account')?$this->lang->line('link_to_the_clients_account'):"Link to the client's account."?>"></i></label>
+      <input type="url" name="account_link" class="form-control" placeholder="https://">
     </div>
   </div>
 </form>
@@ -144,13 +135,18 @@
     </div>
     
     <div class="form-group col-md-6">
-      <label><?=$this->lang->line('company_name')?$this->lang->line('company_name'):'Company Name'?></label>
+      <label><?=$this->lang->line('company_info')?$this->lang->line('company_info'):'Company Info'?></label>
       <input type="text" id="company" name="company" class="form-control">
     </div>
 
     <div class="form-group col-md-6">
       <label><?=$this->lang->line('mobile')?$this->lang->line('mobile'):'Mobile'?></label>
       <input type="text" id="phone" name="phone" class="form-control">
+    </div>
+
+    <div class="form-group col-md-12">
+      <label><?=$this->lang->line('account_link')?$this->lang->line('account_link'):'Account Link'?> <i class="fas fa-question-circle" data-toggle="tooltip" data-placement="right" title="<?=$this->lang->line('link_to_the_clients_account')?$this->lang->line('link_to_the_clients_account'):"Link to the client's account."?>"></i></label>
+      <input type="url" id="account_link" name="account_link" class="form-control" placeholder="https://">
     </div>
     <div class="form-group col-md-6">
       <label><?=$this->lang->line('password')?$this->lang->line('password'):'Password'?> <i class="fas fa-question-circle" data-toggle="tooltip" data-placement="right" title="<?=$this->lang->line('leave_password_and_confirm_password_empty_for_no_change_in_password')?$this->lang->line('leave_password_and_confirm_password_empty_for_no_change_in_password'):'Leave Password and Confirm Password empty for no change in Password.'?>"></i></label>

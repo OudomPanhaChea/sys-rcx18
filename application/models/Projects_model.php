@@ -321,6 +321,63 @@ class Projects_model extends CI_Model
             return false;
     }
 
+    /* ---------------- Project invoices (editable snapshot) ---------------- */
+
+    function get_project_invoice($project_id){
+        $this->db->from('project_invoices');
+        $this->db->where('project_id', $project_id);
+        $this->db->where('saas_id', $this->session->userdata('saas_id'));
+        $invoice = $this->db->get()->row_array();
+        if(!$invoice){
+            return false;
+        }
+        $this->db->from('project_invoice_items');
+        $this->db->where('invoice_id', $invoice['id']);
+        $this->db->order_by('sort_order', 'ASC');
+        $this->db->order_by('id', 'ASC');
+        $invoice['items'] = $this->db->get()->result_array();
+        return $invoice;
+    }
+
+    function save_project_invoice($project_id, $data, $items){
+        $saas_id = $this->session->userdata('saas_id');
+
+        $this->db->from('project_invoices');
+        $this->db->where('project_id', $project_id);
+        $this->db->where('saas_id', $saas_id);
+        $existing = $this->db->get()->row_array();
+
+        if($existing){
+            $data['updated'] = date('Y-m-d H:i:s');
+            $this->db->where('id', $existing['id']);
+            $this->db->where('saas_id', $saas_id);
+            $this->db->update('project_invoices', $data);
+            $invoice_id = $existing['id'];
+        }else{
+            $data['saas_id'] = $saas_id;
+            $data['project_id'] = $project_id;
+            $data['created'] = date('Y-m-d H:i:s');
+            $data['updated'] = $data['created'];
+            if(!$this->db->insert('project_invoices', $data)){
+                return false;
+            }
+            $invoice_id = $this->db->insert_id();
+        }
+
+        // Items are replaced wholesale — the client sends the full list.
+        $this->db->delete('project_invoice_items', array('invoice_id' => $invoice_id));
+        foreach($items as $sort => $item){
+            $this->db->insert('project_invoice_items', array(
+                'invoice_id' => $invoice_id,
+                'description' => $item['description'],
+                'details' => $item['details'],
+                'amount' => $item['amount'],
+                'sort_order' => $sort,
+            ));
+        }
+        return $invoice_id;
+    }
+
     /* ---------------- Project categories ---------------- */
 
     function get_categories(){

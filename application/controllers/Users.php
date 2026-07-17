@@ -267,6 +267,7 @@ class Users extends CI_Controller
 				$tempRow['first_name'] = $system_user->first_name;
 				$tempRow['last_name'] = $system_user->last_name;
 				$tempRow['company'] = company_details('company_name', $system_user->id);
+				$tempRow['account_link'] = isset($system_user->account_link)?$system_user->account_link:'';
 				$tempRow['short_name'] = mb_substr($system_user->first_name, 0, 1, "utf-8").''.mb_substr($system_user->last_name, 0, 1, "utf-8");
 				$tempRow['phone'] = $system_user->phone;
 				$tempRow['active'] = $system_user->active;

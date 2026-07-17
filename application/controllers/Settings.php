@@ -655,6 +655,84 @@ class Settings extends CI_Controller
 		}
 	}
 
+	public function payment_qr()
+	{
+		if ($this->ion_auth->logged_in() && ($this->ion_auth->in_group(1) || $this->ion_auth->in_group(3))) {
+			$this->data['page_title'] = 'Settings - ' . company_name();
+			$this->data['main_page'] = 'payment-qr';
+			$this->data['current_user'] = $this->ion_auth->user()->row();
+
+			$qr = get_payment_qr_settings();
+			$this->data['payment_qr_enabled'] = (!empty($qr) && !empty($qr->enabled)) ? $qr->enabled : '';
+			$this->data['payment_qr_image'] = (!empty($qr) && !empty($qr->image)) ? $qr->image : '';
+
+			$this->load->view('settings', $this->data);
+		} else {
+			redirect('auth', 'refresh');
+		}
+	}
+
+	public function save_payment_qr_setting()
+	{
+		if ($this->ion_auth->logged_in() && ($this->ion_auth->in_group(1) || $this->ion_auth->in_group(3))) {
+
+			$upload_path = 'assets/uploads/payment-qr/';
+			if (!is_dir($upload_path)) {
+				mkdir($upload_path, 0775, true);
+			}
+
+			$image = $this->input->post('qr_image_old') ? $this->input->post('qr_image_old') : '';
+
+			if (!empty($_FILES['qr_image']['name'])) {
+				$config['upload_path'] = $upload_path;
+				$config['allowed_types'] = 'jpg|jpeg|png';
+				$config['overwrite'] = false;
+				$config['max_size'] = 4096;
+				$this->load->library('upload', $config);
+
+				if ($this->upload->do_upload('qr_image')) {
+					$image = $this->upload->data('file_name');
+					if ($this->input->post('qr_image_old')) {
+						$unlink_path = $upload_path . basename($this->input->post('qr_image_old'));
+						if (is_file($unlink_path)) {
+							unlink($unlink_path);
+						}
+					}
+				} else {
+					$this->data['error'] = true;
+					$this->data['message'] = $this->upload->display_errors();
+					echo json_encode($this->data);
+					return false;
+				}
+			}
+
+			$data_json = array(
+				'enabled' => $this->input->post('enabled') ? '1' : '0',
+				'image' => $image,
+			);
+
+			$data = array(
+				'value' => json_encode($data_json)
+			);
+
+			$setting_type = 'payment_qr_' . $this->session->userdata('saas_id');
+
+			if ($this->settings_model->save_settings($setting_type, $data)) {
+				$this->data['error'] = false;
+				$this->data['message'] = $this->lang->line('updated_successfully') ? $this->lang->line('updated_successfully') : "Updated successfully.";
+				echo json_encode($this->data);
+			} else {
+				$this->data['error'] = true;
+				$this->data['message'] = $this->lang->line('something_wrong_try_again') ? $this->lang->line('something_wrong_try_again') : "Something wrong! Try again.";
+				echo json_encode($this->data);
+			}
+		} else {
+			$this->data['error'] = true;
+			$this->data['message'] = $this->lang->line('access_denied') ? $this->lang->line('access_denied') : "Access Denied";
+			echo json_encode($this->data);
+		}
+	}
+
 	public function payment()
 	{
 		if ($this->ion_auth->logged_in() && is_module_allowed('payment_gateway') && ($this->ion_auth->in_group(1) || $this->ion_auth->in_group(3))) {

@@ -3621,6 +3621,8 @@ $(document).on('click','.modal-edit-user',function(e){
 				});
 				$("#update_id").val(result['data'].id);
 				$("#company_name").val(result['data'].company);
+				$("#modal-edit-user-part #company").val(result['data'].company);
+				$("#account_link").val(result['data'].account_link != null ? result['data'].account_link : '');
 	        	$("#old_profile_pic").val(result['data'].profile);
 	        	$("#first_name").val(result['data'].first_name);
 	        	$("#last_name").val(result['data'].last_name);
@@ -4198,6 +4200,9 @@ $(document).on('click','.modal-edit-project',function(e){
 					startDate: moment(result['data'][0]['ending_date'], date_format_js),
 				});
 				$("#budget").val(result['data'][0]['budget']);
+				$("#booking").val(result['data'][0]['booking'] != null ? result['data'][0]['booking'] : '');
+				$("#account_url").val(result['data'][0]['account_url'] != null ? result['data'][0]['account_url'] : '');
+				$("#account_username").val(result['data'][0]['account_username'] != null ? result['data'][0]['account_username'] : '');
 				$("#status").val(result['data'][0]['status']);
 				
 				$("#status").trigger("change");

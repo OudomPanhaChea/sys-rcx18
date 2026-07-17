@@ -51,6 +51,8 @@
 
                           <li class="nav-item"><a href="<?=base_url('settings/telegram')?>" class="nav-link <?=($main_page == 'telegram')?'active':''?>"><i class="fab fa-telegram-plane"></i> <?=$this->lang->line('telegram')?htmlspecialchars($this->lang->line('telegram')):'Telegram'?></a></li>
 
+                          <li class="nav-item"><a href="<?=base_url('settings/payment-qr')?>" class="nav-link <?=($main_page == 'payment-qr')?'active':''?>"><i class="fas fa-qrcode"></i> <?=$this->lang->line('payment_qr')?htmlspecialchars($this->lang->line('payment_qr')):'Payment QR'?></a></li>
+
                         <?php }else{ ?>
                           <li class="nav-item"><a href="<?=base_url('settings/company')?>" class="nav-link <?=($main_page == 'company')?'active':''?>"><i class="fas fa-copyright"></i> <?=$this->lang->line('company')?$this->lang->line('company'):'Company'?></a></li>
 
@@ -62,6 +64,8 @@
                           <?php } ?>
 
                           <li class="nav-item"><a href="<?=base_url('settings/telegram')?>" class="nav-link <?=($main_page == 'telegram')?'active':''?>"><i class="fab fa-telegram-plane"></i> <?=$this->lang->line('telegram')?htmlspecialchars($this->lang->line('telegram')):'Telegram'?></a></li>
+
+                          <li class="nav-item"><a href="<?=base_url('settings/payment-qr')?>" class="nav-link <?=($main_page == 'payment-qr')?'active':''?>"><i class="fas fa-qrcode"></i> <?=$this->lang->line('payment_qr')?htmlspecialchars($this->lang->line('payment_qr')):'Payment QR'?></a></li>
                         <?php } ?>
                         
                       </ul>
@@ -111,13 +115,14 @@
   </script>
 <?php } ?>
 
-<?php if($main_page == 'telegram'){ ?>
+<?php if($main_page == 'telegram' || $main_page == 'payment-qr'){ ?>
   <script>
-    // Dedicated handlers for the Telegram settings form. Placed here (after
-    // includes/js) so jQuery is available, and using its own form id so it
-    // does not hit the shared #setting-form handler (which expects a logo
-    // "data" object in the response and otherwise leaves the spinner stuck).
-    $("#telegram-form").on('submit', function(e) {
+    // Dedicated handlers for the Telegram / Payment QR settings forms. Placed
+    // here (after includes/js) so jQuery is available, and using their own
+    // form ids so they do not hit the shared #setting-form handler (which
+    // expects a logo "data" object in the response and otherwise leaves the
+    // spinner stuck).
+    $("#telegram-form, #payment-qr-form").on('submit', function(e) {
       e.preventDefault();
       var form = $(this),
           save_button = form.find('.savebtn'),
@@ -146,6 +151,14 @@
           save_button.removeClass('btn-progress').attr('disabled', false);
         }
       });
+    });
+
+    // Preview the chosen QR image before saving.
+    $(document).on('change', '#payment_qr_file', function() {
+      var file = this.files && this.files[0];
+      if (file) {
+        $('#payment_qr_preview').attr('src', URL.createObjectURL(file)).show();
+      }
     });
 
     $(document).on('click', '#telegram_test_btn', function() {

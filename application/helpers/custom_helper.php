@@ -2724,6 +2724,49 @@ function formatOffset($offset) {
 }
 
 /* -------------------------------------------------------------------------
+ | Invoice payment QR (ABA KHQR)
+ |
+ | A static bank QR image the client can scan to pay an invoice. Uploaded
+ | once in Settings > Payment QR and printed on every project invoice.
+ | Stored in the `settings` table under type = 'payment_qr_<saas_id>'
+ | (JSON: enabled, image).
+ * ---------------------------------------------------------------------- */
+
+function get_payment_qr_settings()
+{
+    $CI =& get_instance();
+    $CI->db->from('settings');
+    $CI->db->where(['type' => 'payment_qr_'.$CI->session->userdata('saas_id')]);
+    $query = $CI->db->get();
+    $data = $query->result_array();
+    if(!$data){
+        return null;
+    }
+    return json_decode($data[0]['value']);
+}
+
+function payment_qr_enabled()
+{
+    $settings = get_payment_qr_settings();
+    return (!empty($settings) && !empty($settings->enabled) && $settings->enabled == '1');
+}
+
+function payment_qr_image()
+{
+    $settings = get_payment_qr_settings();
+    return (!empty($settings) && !empty($settings->image)) ? $settings->image : '';
+}
+
+/**
+ * Absolute URL of the uploaded QR image, or '' when none is set.
+ */
+function payment_qr_image_url()
+{
+    $image = payment_qr_image();
+    return $image !== '' ? base_url('assets/uploads/payment-qr/'.$image) : '';
+}
+
+/* -------------------------------------------------------------------------
  | Telegram admin notifications
  |
  | Mirrors every notification that is delivered to an admin user into a

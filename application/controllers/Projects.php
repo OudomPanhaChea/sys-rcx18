@@ -1836,6 +1836,217 @@ class Projects extends CI_Controller
 		}
 	}
 
+	/**
+	 * Lean payload for the client-facing project invoice modal.
+	 * Returns only what the invoice sheet needs — no user rows.
+	 */
+	public function get_invoice()
+	{
+		if ($this->ion_auth->logged_in() && !$this->ion_auth->in_group(3))
+		{
+			$this->form_validation->set_rules('project_id', 'Project ID', 'trim|required|strip_tags|xss_clean|is_numeric');
+
+			if($this->form_validation->run() == TRUE){
+				$project_id = $this->input->post('project_id');
+
+				if($this->ion_auth->in_group(4) && !is_my_project($project_id)){
+					$this->data['error'] = true;
+					$this->data['message'] = $this->lang->line('access_denied')?$this->lang->line('access_denied'):"Access Denied";
+					echo json_encode($this->data);
+					return false;
+				}
+
+				if($this->ion_auth->is_admin()){
+					$projects = $this->projects_model->get_projects('',$project_id);
+				}else{
+					$projects = $this->projects_model->get_projects($this->session->userdata('user_id'),$project_id);
+				}
+
+				if(!$projects){
+					$this->data['error'] = true;
+					$this->data['message'] = $this->lang->line('something_wrong_try_again')?$this->lang->line('something_wrong_try_again'):"Something wrong! Try again.";
+					echo json_encode($this->data);
+					return false;
+				}
+
+				$project = $projects[0];
+				$client = $project['project_client'];
+
+				// Auto-generated client logins (created without an email on the
+				// Clients page) should never leak onto a client-facing invoice.
+				$client_email = ($client && strpos($client->email, '@clients.local') === false) ? $client->email : '';
+
+				$company = company_details('', $this->session->userdata('saas_id'));
+				$admin = $this->ion_auth->user($this->session->userdata('saas_id'))->row();
+
+				// Defaults are synced from the project the first time; once an
+				// invoice is saved it becomes its own snapshot and project
+				// edits no longer touch it.
+				$payload = array(
+					'invoice_no' => 'INV-'.str_pad($project['id'], 4, '0', STR_PAD_LEFT),
+					'issued_date' => format_date(date('Y-m-d'), system_date_format()),
+					'issued_date_raw' => date('Y-m-d'),
+					'saved' => false,
+					'project_title' => $project['title'],
+					'booking' => (isset($project['booking']) && is_numeric($project['booking']))?(float)$project['booking']:0,
+					'discount_type' => 'amount',
+					'discount_value' => 0,
+					'notes' => '',
+					'items' => array(array(
+						'description' => $this->lang->line('service_charge')?$this->lang->line('service_charge'):'Service Charge',
+						'details' => $project['title'],
+						'amount' => is_numeric($project['budget'])?(float)$project['budget']:0,
+					)),
+					'currency_code' => get_currency('currency_code'),
+					'currency_symbol' => get_currency('currency_symbol'),
+					'client_name' => $client?trim($client->first_name.' '.$client->last_name):'',
+					'client_company' => ($client && !empty($client->company))?$client->company:'',
+					'client_email' => $client_email,
+					'client_phone' => ($client && !empty($client->phone))?$client->phone:'',
+					'company_name' => (!empty($company) && !empty($company->company_name))?$company->company_name:company_name(),
+					'company_address' => (!empty($company) && !empty($company->address))?$company->address:'',
+					'company_city' => (!empty($company) && !empty($company->city))?$company->city:'',
+					'company_country' => (!empty($company) && !empty($company->country))?$company->country:'',
+					// Static bank QR (ABA KHQR) from Settings > Payment QR; '' hides the block.
+					'payment_qr' => payment_qr_enabled()?payment_qr_image_url():'',
+					// Signature name — the tenant owner (admin), not whoever is viewing.
+					'signed_by' => (!empty($admin) && !empty($admin->first_name))?trim($admin->first_name.' '.$admin->last_name):'',
+				);
+
+				$saved = $this->projects_model->get_project_invoice($project_id);
+				if($saved){
+					$payload['saved'] = true;
+					$payload['invoice_no'] = $saved['invoice_no'];
+					$payload['issued_date'] = $saved['issued_date']?format_date($saved['issued_date'], system_date_format()):$payload['issued_date'];
+					$payload['issued_date_raw'] = $saved['issued_date']?$saved['issued_date']:$payload['issued_date_raw'];
+					$payload['client_name'] = $saved['client_name'];
+					$payload['client_company'] = $saved['client_company'];
+					$payload['client_email'] = $saved['client_email'];
+					$payload['client_phone'] = $saved['client_phone'];
+					$payload['booking'] = (float)$saved['booking'];
+					$payload['discount_type'] = $saved['discount_type'];
+					$payload['discount_value'] = (float)$saved['discount_value'];
+					$payload['notes'] = $saved['notes']?$saved['notes']:'';
+					$payload['items'] = array();
+					foreach($saved['items'] as $item){
+						$payload['items'][] = array(
+							'description' => $item['description'],
+							'details' => $item['details'],
+							'amount' => (float)$item['amount'],
+						);
+					}
+				}
+
+				$this->data['error'] = false;
+				$this->data['data'] = $payload;
+				$this->data['message'] = 'Successful';
+				echo json_encode($this->data);
+			}else{
+				$this->data['error'] = true;
+				$this->data['message'] = validation_errors();
+				echo json_encode($this->data);
+			}
+		}else{
+			$this->data['error'] = true;
+			$this->data['message'] = $this->lang->line('access_denied')?$this->lang->line('access_denied'):"Access Denied";
+			echo json_encode($this->data);
+		}
+	}
+
+	/**
+	 * Persist the edited invoice sheet. The invoice is a standalone snapshot
+	 * (project_invoices + project_invoice_items) — saving never writes back
+	 * to the projects table.
+	 */
+	public function save_invoice()
+	{
+		if ($this->ion_auth->logged_in() && ($this->ion_auth->is_admin() || permissions('project_edit')))
+		{
+			$this->form_validation->set_rules('project_id', 'Project ID', 'trim|required|strip_tags|xss_clean|is_numeric');
+			$this->form_validation->set_rules('invoice_no', 'Invoice No', 'trim|required|strip_tags|xss_clean|max_length[50]');
+			$this->form_validation->set_rules('issued_date', 'Date Issued', 'trim|strip_tags|xss_clean');
+			$this->form_validation->set_rules('client_name', 'Client Name', 'trim|strip_tags|xss_clean|max_length[191]');
+			$this->form_validation->set_rules('client_company', 'Client Company', 'trim|strip_tags|xss_clean|max_length[191]');
+			$this->form_validation->set_rules('client_email', 'Client Email', 'trim|strip_tags|xss_clean|max_length[191]');
+			$this->form_validation->set_rules('client_phone', 'Client Phone', 'trim|strip_tags|xss_clean|max_length[100]');
+			$this->form_validation->set_rules('booking', 'Booking', 'trim|strip_tags|xss_clean|is_numeric');
+			$this->form_validation->set_rules('discount_type', 'Discount Type', 'trim|strip_tags|xss_clean|in_list[amount,percent]');
+			$this->form_validation->set_rules('discount_value', 'Discount', 'trim|strip_tags|xss_clean|is_numeric');
+			$this->form_validation->set_rules('notes', 'Notes', 'trim|strip_tags|xss_clean');
+
+			if($this->form_validation->run() == TRUE){
+				$project_id = $this->input->post('project_id');
+
+				if(!get_count('id', 'projects', 'id='.$project_id.' AND saas_id='.$this->session->userdata('saas_id'))){
+					$this->data['error'] = true;
+					$this->data['message'] = $this->lang->line('access_denied')?$this->lang->line('access_denied'):"Access Denied";
+					echo json_encode($this->data);
+					return false;
+				}
+
+				$issued_date = $this->input->post('issued_date');
+				if(!preg_match('/^\d{4}-\d{2}-\d{2}$/', $issued_date ? $issued_date : '')){
+					$issued_date = date('Y-m-d');
+				}
+
+				$items_raw = json_decode($this->input->post('items'), true);
+				$items = array();
+				if(is_array($items_raw)){
+					foreach(array_slice($items_raw, 0, 50) as $item){
+						if(!is_array($item)) continue;
+						$description = isset($item['description'])?trim(strip_tags($item['description'])):'';
+						$details = isset($item['details'])?trim(strip_tags($item['details'])):'';
+						$amount = (isset($item['amount']) && is_numeric($item['amount']))?(float)$item['amount']:0;
+						if($description === '' && $details === '' && $amount == 0) continue;
+						$items[] = array(
+							'description' => mb_substr($description, 0, 255),
+							'details' => mb_substr($details, 0, 255),
+							'amount' => $amount,
+						);
+					}
+				}
+				if(empty($items)){
+					$this->data['error'] = true;
+					$this->data['message'] = $this->lang->line('invoice_needs_item')?$this->lang->line('invoice_needs_item'):"Invoice needs at least one item.";
+					echo json_encode($this->data);
+					return false;
+				}
+
+				$booking = $this->input->post('booking');
+				$discount_value = $this->input->post('discount_value');
+				$data = array(
+					'invoice_no' => $this->input->post('invoice_no'),
+					'issued_date' => $issued_date,
+					'client_name' => (string)$this->input->post('client_name'),
+					'client_company' => (string)$this->input->post('client_company'),
+					'client_email' => (string)$this->input->post('client_email'),
+					'client_phone' => (string)$this->input->post('client_phone'),
+					'booking' => is_numeric($booking)?(float)$booking:0,
+					'discount_type' => $this->input->post('discount_type')=='percent'?'percent':'amount',
+					'discount_value' => is_numeric($discount_value)?(float)$discount_value:0,
+					'notes' => (string)$this->input->post('notes'),
+				);
+
+				if($this->projects_model->save_project_invoice($project_id, $data, $items)){
+					$this->data['error'] = false;
+					$this->data['message'] = $this->lang->line('invoice_saved')?$this->lang->line('invoice_saved'):'Invoice saved.';
+				}else{
+					$this->data['error'] = true;
+					$this->data['message'] = $this->lang->line('something_wrong_try_again')?$this->lang->line('something_wrong_try_again'):"Something wrong! Try again.";
+				}
+				echo json_encode($this->data);
+			}else{
+				$this->data['error'] = true;
+				$this->data['message'] = validation_errors();
+				echo json_encode($this->data);
+			}
+		}else{
+			$this->data['error'] = true;
+			$this->data['message'] = $this->lang->line('access_denied')?$this->lang->line('access_denied'):"Access Denied";
+			echo json_encode($this->data);
+		}
+	}
+
 	public function edit_project()
 	{
 		if ($this->ion_auth->logged_in() && ($this->ion_auth->is_admin() || permissions('project_edit')))
@@ -1847,6 +2058,9 @@ class Projects extends CI_Controller
 			$this->form_validation->set_rules('starting_date', 'Starting Date', 'trim|required|strip_tags|xss_clean');
 			$this->form_validation->set_rules('ending_date', 'Ending Date', 'trim|required|strip_tags|xss_clean');
 			$this->form_validation->set_rules('budget', 'Budget', 'trim|strip_tags|xss_clean|is_numeric');
+			$this->form_validation->set_rules('booking', 'Booking', 'trim|strip_tags|xss_clean|is_numeric');
+			$this->form_validation->set_rules('account_url', 'Account URL', 'trim|strip_tags|xss_clean');
+			$this->form_validation->set_rules('account_username', 'Username or ID', 'trim|strip_tags|xss_clean');
 			$this->form_validation->set_rules('status', 'Status', 'trim|required|strip_tags|xss_clean');
 
 			if($this->form_validation->run() == TRUE){
@@ -1868,6 +2082,9 @@ class Projects extends CI_Controller
 					'starting_date' => $starting_date,
 					'ending_date' => $ending_date,
 					'budget' => $this->input->post('budget'),
+					'booking' => $this->input->post('booking'),
+					'account_url' => $this->input->post('account_url'),
+					'account_username' => $this->input->post('account_username'),
 					'status' => $this->input->post('status'),
 					'category_id' => ($this->input->post('category') && is_numeric($this->input->post('category')))?$this->input->post('category'):NULL,
 					'issue_id' => ($this->input->post('issue') && is_numeric($this->input->post('issue')))?$this->input->post('issue'):NULL,
@@ -1965,7 +2182,7 @@ class Projects extends CI_Controller
 	{
 		if ($this->ion_auth->logged_in() && ($this->ion_auth->is_admin() || permissions('project_create')))
 		{
-			if(!my_plan_features('projects')){ 
+			if(!my_plan_features('projects')){
 				$this->data['error'] = true;
 				$this->data['message'] = $this->lang->line('something_wrong_try_again')?$this->lang->line('something_wrong_try_again'):"Something wrong! Try again.";
 				echo json_encode($this->data);
@@ -1978,6 +2195,9 @@ class Projects extends CI_Controller
 			$this->form_validation->set_rules('starting_date', 'Starting Date', 'trim|required|strip_tags|xss_clean');
 			$this->form_validation->set_rules('ending_date', 'Ending Date', 'trim|required|strip_tags|xss_clean');
 			$this->form_validation->set_rules('budget', 'Budget', 'trim|strip_tags|xss_clean|is_numeric');
+			$this->form_validation->set_rules('booking', 'Booking', 'trim|strip_tags|xss_clean|is_numeric');
+			$this->form_validation->set_rules('account_url', 'Account URL', 'trim|strip_tags|xss_clean');
+			$this->form_validation->set_rules('account_username', 'Username or ID', 'trim|strip_tags|xss_clean');
 			$this->form_validation->set_rules('status', 'Status', 'trim|required|strip_tags|xss_clean');
 
 			if($this->form_validation->run() == TRUE){
@@ -2000,12 +2220,15 @@ class Projects extends CI_Controller
 					'starting_date' => $starting_date,
 					'ending_date' => $ending_date,
 					'budget' => $this->input->post('budget'),
+					'booking' => $this->input->post('booking'),
+					'account_url' => $this->input->post('account_url'),
+					'account_username' => $this->input->post('account_username'),
 					'status' => $this->input->post('status'),
 					'category_id' => ($this->input->post('category') && is_numeric($this->input->post('category')))?$this->input->post('category'):NULL,
 					'issue_id' => ($this->input->post('issue') && is_numeric($this->input->post('issue')))?$this->input->post('issue'):NULL,
 				);
 				$project_id = $this->projects_model->create_project($data);
-				
+
 				if($project_id){
 
 					$template_data = array();
